@@ -28,8 +28,11 @@ def generate_launch_description():
     Node(
       package='ichthus_xsens_driver',
       namespace='',
-      executable='ichthus_xsens_driver',
-      name='ichthus_xsens_driver'
-      # parameters=[param]
+      executable='mtnode.py',
+      name='mtnode',
+      parameters=[
+        {'device': 'auto'},
+      ],
+      output='screen'
     )
   ])
