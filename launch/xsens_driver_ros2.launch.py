@@ -20,13 +20,13 @@ def generate_launch_description():
   """Generate launch description with multiple components."""
 
   # param = get_param_file(
-  #   'ichthus_xsens_driver',
+  #   'xsens_driver_ros2',
   #   'frontend_default.param.yaml'
   # )
 
   return LaunchDescription([
     Node(
-      package='ichthus_xsens_driver',
+      package='xsens_driver_ros2',
       namespace='',
       executable='mtnode.py',
       name='mtnode',

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(ichthus_xsens_driver)
+project(xsens_driver_ros2)
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
@@ -27,7 +27,7 @@ ament_auto_package(
     launch
 )
 
-install(PROGRAMS scripts/__init__.py scripts/ichthus_xsens_driver.py scripts/mtdef.py
+install(PROGRAMS scripts/__init__.py scripts/xsens_driver_ros2.py scripts/mtdef.py
                 scripts/mtdevice.py scripts/mtnode.py DESTINATION lib/${PROJECT_NAME})
 
 install(FILES DESTINATION share/${PROJECT_NAME})

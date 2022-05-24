@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>ichthus_xsens_driver</name>
+  <name>xsens_driver_ros2</name>
   <version>0.1.0</version>
   <description>The raw_vehicle_cmd_converter package</description>
   <maintainer email="eunseo.choi.d@gmail.com">eunseo</maintainer>

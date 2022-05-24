@@ -1,1 +1,1 @@
-# ichthus_xsens_driver
+# xsens_driver_ros2

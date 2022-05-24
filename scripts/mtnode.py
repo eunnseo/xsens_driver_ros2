@@ -58,7 +58,7 @@ import serial
 class XSensDriver(Node):
 
     def __init__(self):
-        super().__init__('ichthus_xsens_driver')
+        super().__init__('xsens_driver_ros2')
 
         self.declare_parameter('device', 'au')
 
