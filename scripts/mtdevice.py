@@ -171,16 +171,15 @@ class MTDevice(object):
                 if mid_ack == (mid+1):
                     break
                 elif self.verbose:
-                    print("ack (0x%02X) expected, got 0x%02X instead" % \
-                        (mid+1, mid_ack))
-            else:  # inner look not broken
-                continue  # retry (send+wait)
-            break  # still no luck
-        else:
-            n_retries = n_resend*n_read
-            raise MTException("Ack (0x%02X) expected, MID 0x%02X received "
-                              "instead (after %d retries)." % (mid+1, mid_ack,
-                                                               n_retries))
+                    print("ack (0x%02X) expected, got 0x%02X instead" % (mid+1, mid_ack))
+                else:  # inner look not broken
+                    continue  # retry (send+wait)
+                break  # still no luck
+            else:
+                n_retries = n_resend*n_read
+                raise MTException("Ack (0x%02X) expected, MID 0x%02X received "
+                                "instead (after %d retries)." % (mid+1, mid_ack,
+                                                                n_retries))
         return data_ack
 
     def _ensure_config_state(self):
@@ -214,6 +213,7 @@ class MTDevice(object):
 
     def GoToConfig(self):
         """Place MT device in configuration mode."""
+        print("GoToConfig..")
         self.write_ack(MID.GoToConfig)
         self.state = DeviceState.Config
 
@@ -1174,6 +1174,7 @@ class MTDevice(object):
 # Auto detect port
 ################################################################
 def find_devices(timeout=0.002, verbose=False, initial_wait=0.1):
+    print("find_devices..")
     mtdev_list = []
     for port in glob.glob("/dev/tty*S*"):
         if verbose:
@@ -1184,6 +1185,8 @@ def find_devices(timeout=0.002, verbose=False, initial_wait=0.1):
                 mtdev_list.append((port, br))
         except MTException:
             pass
+    print("find_devices done!")
+    print("mtdev_list = ", mtdev_list)
     return mtdev_list
 
 
@@ -1194,8 +1197,7 @@ def find_baudrate(port, timeout=0.002, verbose=False, initial_wait=0.1):
     baudrates = (115200, 460800, 921600, 230400, 57600, 38400, 19200, 9600)
     for br in baudrates:
         if verbose:
-            print("Trying %d bd:" % br,
-            sys.stdout.flush())
+            print("Trying %d bd:" % br, sys.stdout.flush())
         try:
             mt = MTDevice(port, br, timeout=timeout, verbose=verbose,
                           initial_wait=initial_wait)

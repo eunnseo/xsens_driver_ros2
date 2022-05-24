@@ -22,8 +22,10 @@ import datetime
 import calendar
 import serial
 
+import struct
+
 # # transform Euler angles or matrix into quaternions
-# from math import radians, sqrt, atan2
+from math import radians, sqrt, atan2
 # from tf.transformations import quaternion_from_matrix, quaternion_from_euler,\
 #     identity_matrix
 
@@ -31,7 +33,7 @@ import serial
 # def get_param(name, default):
 #     try:
 #         v = rospy.get_param(name)
-#         rospy.loginfo("Found parameter: %s, value: %s" % (name, str(v)))
+#         self.get_logger().info("Found parameter: %s, value: %s" % (name, str(v)))
 #     except KeyError:
 #         v = default
 #         rospy.logwarn("Cannot find value for parameter: %s, assigning "
@@ -47,12 +49,12 @@ import serial
 #     return value
 
 
-# def matrix_from_diagonal(diagonal):
-#     n = len(diagonal)
-#     matrix = [0] * n * n
-#     for i in range(0, n):
-#         matrix[i*n + i] = diagonal[i]
-#     return tuple(matrix)
+def matrix_from_diagonal(diagonal):
+    n = len(diagonal)
+    matrix = [0] * n * n
+    for i in range(0, n):
+        matrix[i*n + i] = diagonal[i]
+    return tuple(matrix)
 
 
 class XSensDriver(Node):
@@ -61,133 +63,171 @@ class XSensDriver(Node):
         super().__init__('xsens_driver_ros2')
 
         self.declare_parameter('device', 'au')
+        self.declare_parameter('baudrate', 0)
+        self.declare_parameter('timeout', 0.002)
+        self.declare_parameter('initial_wait', 0.1)
 
-        device = self.get_parameter('device')
+        device = self.get_parameter('device').value
+        baudrate = self.get_parameter('baudrate').value
+        timeout = self.get_parameter('timeout').value
+        initial_wait = self.get_parameter('initial_wait').value
 
-        print(device.value)
+        print("device = ", device)
+        print("baudrate = ", baudrate)
+        print("timeout = ", timeout)
+        print("initial_wait = ", initial_wait)
 
-        # device = get_param('~device', 'auto')
-        # baudrate = get_param('~baudrate', 0)
-        # timeout = get_param('~timeout', 0.002)
-        # initial_wait = get_param('~initial_wait', 0.1)
-        # if device == 'auto':
-        #     devs = mtdevice.find_devices(timeout=timeout,
-        #                                  initial_wait=initial_wait)
-        #     if devs:
-        #         device, baudrate = devs[0]
-        #         rospy.loginfo("Detected MT device on port %s @ %d bps"
-        #                       % (device, baudrate))
-        #     else:
-        #         rospy.logerr("Fatal: could not find proper MT device.")
-        #         rospy.signal_shutdown("Could not find proper MT device.")
+        if device == "auto":
+            print("debugging 1")
+            devs = mtdevice.find_devices(timeout=timeout, verbose=True,
+                                         initial_wait=initial_wait)
+            if devs:
+                print("debugging 2")
+                device, baudrate = devs[0]
+                self.get_logger().info("Detected MT device on port %s @ %d bps"
+                              % (device, baudrate))
+            else:
+                print("debugging 3")
+        # ############################################################
+        #         # rospy.logerr("Fatal: could not find proper MT device.")
+        #         # rospy.signal_shutdown("Could not find proper MT device.")
+        #         self.get_logger().info("Fatal: Could not find proper MT device.")
+        #         self.destroy_node()
+        #         rclpy.shutdown()
         #         return
         # if not baudrate:
+        #     print("debugging 4")
         #     baudrate = mtdevice.find_baudrate(device, timeout=timeout,
         #                                       initial_wait=initial_wait)
         # if not baudrate:
-        #     rospy.logerr("Fatal: could not find proper baudrate.")
-        #     rospy.signal_shutdown("Could not find proper baudrate.")
+        #     # rospy.logerr("Fatal: could not find proper baudrate.")
+        #     # rospy.signal_shutdown("Could not find proper baudrate.")
+        #     self.get_logger().info("Fatal: Could not find proper baudrate.")
+        #     self.destroy_node()
+        #     rclpy.shutdown()
         #     return
 
-        # rospy.loginfo("MT node interface: %s at %d bd." % (device, baudrate))
+        # print("debugging 5")
+        # self.get_logger().info("MT node interface: %s at %d bd." % (device, baudrate))
         # self.mt = mtdevice.MTDevice(device, baudrate, timeout,
         #                             initial_wait=initial_wait)
 
         # # optional no rotation procedure for internal calibration of biases
         # # (only mark iv devices)
-        # no_rotation_duration = get_param('~no_rotation_duration', 0)
+        # self.declare_parameter('no_rotation_duration', 0)
+        # no_rotation_duration = self.get_parameter('no_rotation_duration').value
         # if no_rotation_duration:
-        #     rospy.loginfo("Starting the no-rotation procedure to estimate the "
+        #     self.get_logger().info("Starting the no-rotation procedure to estimate the "
         #                   "gyroscope biases for %d s. Please don't move the "
         #                   "IMU during this time." % no_rotation_duration)
         #     self.mt.SetNoRotation(no_rotation_duration)
+        # ############################################################
 
-        # self.frame_id = get_param('~frame_id', '/base_imu')
+        self.declare_parameter('frame_id', '/base_imu')
+        frame_id = self.get_parameter('frame_id').value
+        print("frame_id = ", frame_id)
 
-        # self.frame_local = get_param('~frame_local', 'ENU')
+        self.declare_parameter('frame_local', 'ENU')
+        frame_local = self.get_parameter('frame_local').value
+        print("frame_local = ", frame_local)
 
-        # self.angular_velocity_covariance = matrix_from_diagonal(
-        #     get_param_list('~angular_velocity_covariance_diagonal', [radians(0.025)] * 3)
-        # )
-        # self.linear_acceleration_covariance = matrix_from_diagonal(
-        #     get_param_list('~linear_acceleration_covariance_diagonal', [0.0004] * 3)
-        # )
-        # self.orientation_covariance = matrix_from_diagonal(
-        #     get_param_list("~orientation_covariance_diagonal", [radians(1.), radians(1.), radians(9.)])
-        # )
+        self.declare_parameter('angular_velocity_covariance', [radians(0.025)] * 3)
+        angular_velocity_covariance = matrix_from_diagonal(
+            self.get_parameter('angular_velocity_covariance').value
+        )
+        print("angular_velocity_covariance = ", angular_velocity_covariance)
 
-        # self.diag_msg = DiagnosticArray()
-        # self.stest_stat = DiagnosticStatus(name='mtnode: Self Test', level=1,
-        #                                    message='No status information')
-        # self.xkf_stat = DiagnosticStatus(name='mtnode: XKF Valid', level=1,
-        #                                  message='No status information')
-        # self.gps_stat = DiagnosticStatus(name='mtnode: GPS Fix', level=1,
-        #                                  message='No status information')
-        # self.diag_msg.status = [self.stest_stat, self.xkf_stat, self.gps_stat]
+        self.declare_parameter('linear_acceleration_covariance', [0.0004] * 3)
+        linear_acceleration_covariance = matrix_from_diagonal(
+            self.get_parameter('linear_acceleration_covariance').value
+        )
+        print("linear_acceleration_covariance = ", linear_acceleration_covariance)
 
-        # # publishers created at first use to reduce topic clutter
-        # self.diag_pub = None
-        # self.imu_pub = None
-        # self.raw_gps_pub = None
-        # self.vel_pub = None
-        # self.mag_pub = None
-        # self.pos_gps_pub = None
-        # self.temp_pub = None
-        # self.press_pub = None
-        # self.analog_in1_pub = None  # decide type+header
-        # self.analog_in2_pub = None  # decide type+header
-        # self.ecef_pub = None
-        # self.time_ref_pub = None
-        # # TODO pressure, ITOW from raw GPS?
-        # self.old_bGPS = 256  # publish GPS only if new
+        self.declare_parameter('orientation_covariance', [radians(1.), radians(1.), radians(9.)])
+        orientation_covariance = matrix_from_diagonal(
+            self.get_parameter('orientation_covariance').value
+        )
+        print("orientation_covariance = ", orientation_covariance)
 
-        # # publish a string version of all data; to be parsed by clients
-        # self.str_pub = rospy.Publisher('imu_data_str', String, queue_size=10)
-        # self.last_delta_q_time = None
-        # self.delta_q_rate = None
+        self.diag_msg = DiagnosticArray()
+        self.stest_stat = DiagnosticStatus(name='mtnode: Self Test', level=struct.pack("B", 1),
+                                           message='No status information')
+        self.xkf_stat = DiagnosticStatus(name='mtnode: XKF Valid', level=struct.pack("B", 1),
+                                         message='No status information')
+        self.gps_stat = DiagnosticStatus(name='mtnode: GPS Fix', level=struct.pack("B", 1),
+                                         message='No status information')
+        self.diag_msg.status = [self.stest_stat, self.xkf_stat, self.gps_stat]
 
-#     def reset_vars(self):
-#         self.imu_msg = Imu()
-#         self.imu_msg.orientation_covariance = (-1., )*9
-#         self.imu_msg.angular_velocity_covariance = (-1., )*9
-#         self.imu_msg.linear_acceleration_covariance = (-1., )*9
-#         self.pub_imu = False
-#         self.raw_gps_msg = NavSatFix()
-#         self.pub_raw_gps = False
-#         self.pos_gps_msg = NavSatFix()
-#         self.pub_pos_gps = False
-#         self.vel_msg = TwistStamped()
-#         self.pub_vel = False
-#         self.mag_msg = MagneticField()
-#         self.mag_msg.magnetic_field_covariance = (0, )*9
-#         self.pub_mag = False
-#         self.temp_msg = Temperature()
-#         self.temp_msg.variance = 0.
-#         self.pub_temp = False
-#         self.press_msg = FluidPressure()
-#         self.press_msg.variance = 0.
-#         self.pub_press = False
-#         self.anin1_msg = UInt16()
-#         self.pub_anin1 = False
-#         self.anin2_msg = UInt16()
-#         self.pub_anin2 = False
-#         self.ecef_msg = PointStamped()
-#         self.pub_ecef = False
-#         self.pub_diag = False
+        # publishers created at first use to reduce topic clutter
+        self.diag_pub = None
+        self.imu_pub = None
+        self.raw_gps_pub = None
+        self.vel_pub = None
+        self.mag_pub = None
+        self.pos_gps_pub = None
+        self.temp_pub = None
+        self.press_pub = None
+        self.analog_in1_pub = None  # decide type+header
+        self.analog_in2_pub = None  # decide type+header
+        self.ecef_pub = None
+        self.time_ref_pub = None
+        # TODO pressure, ITOW from raw GPS?
+        self.old_bGPS = 256  # publish GPS only if new
 
-#     def spin(self):
-#         try:
-#             while not rospy.is_shutdown():
-#                 self.spin_once()
-#                 self.reset_vars()
-#         # Ctrl-C signal interferes with select with the ROS signal handler
-#         # should be OSError in python 3.?
-#         except (select.error, OSError, serial.serialutil.SerialException):
-#             pass
+        # publish a string version of all data; to be parsed by clients
+        self.str_pub = self.create_publisher(String, 'imu_data_str', 10)
+        self.last_delta_q_time = None
+        self.delta_q_rate = None
 
-#     def spin_once(self):
-#         '''Read data from device and publishes ROS messages.'''
-#         def convert_coords(x, y, z, source, dest=self.frame_local):
+    def reset_vars(self):
+        print("!!!reset_vars!!!")
+        self.imu_msg = Imu()
+        self.imu_msg.orientation_covariance = (-1., )*9
+        self.imu_msg.angular_velocity_covariance = (-1., )*9
+        self.imu_msg.linear_acceleration_covariance = (-1., )*9
+        self.pub_imu = False
+        self.raw_gps_msg = NavSatFix()
+        self.pub_raw_gps = False
+        self.pos_gps_msg = NavSatFix()
+        self.pub_pos_gps = False
+        self.vel_msg = TwistStamped()
+        self.pub_vel = False
+        self.mag_msg = MagneticField()
+        self.mag_msg.magnetic_field_covariance = (0., )*9
+        self.pub_mag = False
+        self.temp_msg = Temperature()
+        self.temp_msg.variance = 0.
+        self.pub_temp = False
+        self.press_msg = FluidPressure()
+        self.press_msg.variance = 0.
+        self.pub_press = False
+        self.anin1_msg = UInt16()
+        self.pub_anin1 = False
+        self.anin2_msg = UInt16()
+        self.pub_anin2 = False
+        self.ecef_msg = PointStamped()
+        self.pub_ecef = False
+        self.pub_diag = False
+
+    def spin(self):
+        print("!!!spin!!!")
+        if rclpy.ok():
+            self.spin_once()
+            self.reset_vars()
+        # try:
+        #     while rclpy.ok():
+        #         self.spin_once()
+        #         self.reset_vars()
+        #     print("!!!done!!!")
+        # # Ctrl-C signal interferes with select with the ROS signal handler
+        # # should be OSError in python 3.?
+        # except (select.error, OSError, serial.serialutil.SerialException):
+        #     pass
+
+    def spin_once(self):
+        '''Read data from device and publishes ROS messages.'''
+        print("!!!spin_once!!!")
+#        def convert_coords(x, y, z, source, dest=self.frame_local):
 #             """Convert the coordinates between ENU, NED, and NWU."""
 #             if source == dest:
 #                 return x, y, z
@@ -286,7 +326,7 @@ class XSensDriver(Node):
 #             '''Fill messages with information from 'raw' MTData block.'''
 #             # don't publish raw imu data anymore
 #             # TODO find what to do with that
-#             rospy.loginfo("Got MTi data packet: 'RAW', ignored!")
+#             self.get_logger().info("Got MTi data packet: 'RAW', ignored!")
 
 #         def fill_from_RAWGPS(rawgps_data):
 #             '''Fill messages with information from 'rawgps' MTData block.'''
@@ -811,7 +851,9 @@ def main(args=None):
     
     # rospy.init_node('xsens_driver')
     driver = XSensDriver()
-    # driver.spin()
+    driver.spin()
+
+    print("Bye")
 
 
 if __name__ == '__main__':
