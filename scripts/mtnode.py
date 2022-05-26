@@ -1,11 +1,9 @@
 #! /usr/bin/env python3
 
 import rclpy
-# import rclpy.node 
 from rclpy.node import Node
 
 # import roslib; roslib.load_manifest('xsens_driver')
-# import rospy
 import select
 import sys
 
@@ -30,25 +28,6 @@ from math import radians, sqrt, atan2
 #     identity_matrix
 
 
-# def get_param(name, default):
-#     try:
-#         v = rospy.get_param(name)
-#         self.get_logger().info("Found parameter: %s, value: %s" % (name, str(v)))
-#     except KeyError:
-#         v = default
-#         rospy.logwarn("Cannot find value for parameter: %s, assigning "
-#                       "default: %s" % (name, str(v)))
-#     return v
-
-
-# def get_param_list(name, default):
-#     value = get_param(name, default)
-#     if len(default) != len(value):
-#         rospy.logfatal("Parameter %s should be a list of size %d", name, len(default))
-#         sys.exit(1)
-#     return value
-
-
 def matrix_from_diagonal(diagonal):
     n = len(diagonal)
     matrix = [0] * n * n
@@ -62,92 +41,58 @@ class XSensDriver(Node):
     def __init__(self):
         super().__init__('xsens_driver_ros2')
 
-        self.declare_parameter('device', 'au')
-        self.declare_parameter('baudrate', 0)
-        self.declare_parameter('timeout', 0.002)
-        self.declare_parameter('initial_wait', 0.1)
-
-        device = self.get_parameter('device').value
-        baudrate = self.get_parameter('baudrate').value
-        timeout = self.get_parameter('timeout').value
-        initial_wait = self.get_parameter('initial_wait').value
-
-        print("device = ", device)
-        print("baudrate = ", baudrate)
-        print("timeout = ", timeout)
-        print("initial_wait = ", initial_wait)
+        device = self.get_param('device', 'auto')
+        baudrate = self.get_param('baudrate', 0)
+        timeout = self.get_param('timeout', 0.002)
+        initial_wait = self.get_param('initial_wait', 0.1)
 
         if device == "auto":
-            print("debugging 1")
-            devs = mtdevice.find_devices(timeout=timeout, verbose=True,
+            devs = mtdevice.find_devices(timeout=timeout, verbose=False, # verbose setting
                                          initial_wait=initial_wait)
             if devs:
-                print("debugging 2")
                 device, baudrate = devs[0]
                 self.get_logger().info("Detected MT device on port %s @ %d bps"
                               % (device, baudrate))
             else:
-                print("debugging 3")
-        # ############################################################
-        #         # rospy.logerr("Fatal: could not find proper MT device.")
-        #         # rospy.signal_shutdown("Could not find proper MT device.")
-        #         self.get_logger().info("Fatal: Could not find proper MT device.")
-        #         self.destroy_node()
-        #         rclpy.shutdown()
-        #         return
-        # if not baudrate:
-        #     print("debugging 4")
-        #     baudrate = mtdevice.find_baudrate(device, timeout=timeout,
-        #                                       initial_wait=initial_wait)
-        # if not baudrate:
-        #     # rospy.logerr("Fatal: could not find proper baudrate.")
-        #     # rospy.signal_shutdown("Could not find proper baudrate.")
-        #     self.get_logger().info("Fatal: Could not find proper baudrate.")
-        #     self.destroy_node()
-        #     rclpy.shutdown()
-        #     return
+                self.get_logger().error("Fatal: Could not find proper MT device.")
+                self.destroy_node()
+                rclpy.shutdown()
+                return
+        if not baudrate:
+            baudrate = mtdevice.find_baudrate(device, timeout=timeout,
+                                              initial_wait=initial_wait)
+        if not baudrate:
+            self.get_logger().error("Fatal: Could not find proper baudrate.")
+            self.destroy_node()
+            rclpy.shutdown()
+            return
 
-        # print("debugging 5")
-        # self.get_logger().info("MT node interface: %s at %d bd." % (device, baudrate))
-        # self.mt = mtdevice.MTDevice(device, baudrate, timeout,
-        #                             initial_wait=initial_wait)
+        self.get_logger().info("MT node interface: %s at %d bd." % (device, baudrate))
+        self.mt = mtdevice.MTDevice(device, baudrate, timeout,
+                                    initial_wait=initial_wait)
 
-        # # optional no rotation procedure for internal calibration of biases
-        # # (only mark iv devices)
-        # self.declare_parameter('no_rotation_duration', 0)
-        # no_rotation_duration = self.get_parameter('no_rotation_duration').value
-        # if no_rotation_duration:
-        #     self.get_logger().info("Starting the no-rotation procedure to estimate the "
-        #                   "gyroscope biases for %d s. Please don't move the "
-        #                   "IMU during this time." % no_rotation_duration)
-        #     self.mt.SetNoRotation(no_rotation_duration)
-        # ############################################################
+        # optional no rotation procedure for internal calibration of biases
+        # (only mark iv devices)
+        no_rotation_duration = self.get_param('no_rotation_duration', 0)
+        if no_rotation_duration:
+            self.get_logger().info("Starting the no-rotation procedure to estimate the "
+                          "gyroscope biases for %d s. Please don't move the "
+                          "IMU during this time." % no_rotation_duration)
+            self.mt.SetNoRotation(no_rotation_duration)
 
-        self.declare_parameter('frame_id', '/base_imu')
-        frame_id = self.get_parameter('frame_id').value
-        print("frame_id = ", frame_id)
+        frame_id = self.get_param('frame_id', '/base_imu')
 
-        self.declare_parameter('frame_local', 'ENU')
-        frame_local = self.get_parameter('frame_local').value
-        print("frame_local = ", frame_local)
+        frame_local = self.get_param('frame_local', 'ENU')
 
-        self.declare_parameter('angular_velocity_covariance', [radians(0.025)] * 3)
         angular_velocity_covariance = matrix_from_diagonal(
-            self.get_parameter('angular_velocity_covariance').value
+            self.get_param_list('angular_velocity_covariance', [radians(0.025)] * 3)
         )
-        print("angular_velocity_covariance = ", angular_velocity_covariance)
-
-        self.declare_parameter('linear_acceleration_covariance', [0.0004] * 3)
         linear_acceleration_covariance = matrix_from_diagonal(
-            self.get_parameter('linear_acceleration_covariance').value
+            self.get_param_list('linear_acceleration_covariance_diagonal', [0.0004] * 3)
         )
-        print("linear_acceleration_covariance = ", linear_acceleration_covariance)
-
-        self.declare_parameter('orientation_covariance', [radians(1.), radians(1.), radians(9.)])
         orientation_covariance = matrix_from_diagonal(
-            self.get_parameter('orientation_covariance').value
+            self.get_param_list("orientation_covariance_diagonal", [radians(1.), radians(1.), radians(9.)])
         )
-        print("orientation_covariance = ", orientation_covariance)
 
         self.diag_msg = DiagnosticArray()
         self.stest_stat = DiagnosticStatus(name='mtnode: Self Test', level=struct.pack("B", 1),
@@ -178,6 +123,24 @@ class XSensDriver(Node):
         self.str_pub = self.create_publisher(String, 'imu_data_str', 10)
         self.last_delta_q_time = None
         self.delta_q_rate = None
+
+    def get_param(self, name, default):
+        try:
+            self.declare_parameter(name, default)
+            v = self.get_parameter(name).value
+            self.get_logger().info("Found parameter: %s, value: %s" % (name, str(v)))
+        except KeyError:
+            v = default
+            self.get_logger.warning("Cannot find value for parameter: %s, assigning "
+                        "default: %s" % (name, str(v)))
+        return v
+
+    def get_param_list(self, name, default):
+        value = self.get_param(name, default)
+        if len(default) != len(value):
+            self.get_logger().fatal("Parameter %s should be a list of size %d", name, len(default))
+            sys.exit(1)
+        return value
 
     def reset_vars(self):
         print("!!!reset_vars!!!")
@@ -211,11 +174,10 @@ class XSensDriver(Node):
 
     def spin(self):
         print("!!!spin!!!")
-        if rclpy.ok():
-            self.spin_once()
-            self.reset_vars()
+        self.spin_once()
+        self.reset_vars()
         # try:
-        #     while rclpy.ok():
+        #     while rclpy.ok(): ## Troubleshooting
         #         self.spin_once()
         #         self.reset_vars()
         #     print("!!!done!!!")
@@ -282,19 +244,18 @@ class XSensDriver(Node):
 #                 elif dest == 'NWU':
 #                     return q
 
-#         def publish_time_ref(secs, nsecs, source):
-#             """Publish a time reference."""
-#             # Doesn't follow the standard publishing pattern since several time
-#             # refs could be published simultaneously
-#             if self.time_ref_pub is None:
-#                 self.time_ref_pub = rospy.Publisher(
-#                     'time_reference', TimeReference, queue_size=10)
-#             time_ref_msg = TimeReference()
-#             time_ref_msg.header = self.h
-#             time_ref_msg.time_ref.secs = secs
-#             time_ref_msg.time_ref.nsecs = nsecs
-#             time_ref_msg.source = source
-#             self.time_ref_pub.publish(time_ref_msg)
+        def publish_time_ref(secs, nsecs, source):
+            """Publish a time reference."""
+            # Doesn't follow the standard publishing pattern since several time
+            # refs could be published simultaneously
+            if self.time_ref_pub is None:
+                self.time_ref_pub = self.create_publisher(TimeReference, 'time_reference', 10)
+            time_ref_msg = TimeReference()
+            time_ref_msg.header = self.h
+            time_ref_msg.time_ref.secs = secs
+            time_ref_msg.time_ref.nsecs = nsecs
+            time_ref_msg.source = source
+            self.time_ref_pub.publish(time_ref_msg)
 
 #         def stamp_from_itow(itow, y=None, m=None, d=None, ns=0, week=None):
 #             """Return (secs, nsecs) from GPS time of week ms information."""
@@ -624,7 +585,7 @@ class XSensDriver(Node):
 #             try:
 #                 dqw, dqx, dqy, dqz = (o['Delta q0'], o['Delta q1'],
 #                     o['Delta q2'], o['Delta q3'])
-#                 now = rospy.Time.now()
+#                 now = self.get_clock().now()
 #                 if self.last_delta_q_time is None:
 #                     self.last_delta_q_time = now
 #                 else:
@@ -755,94 +716,89 @@ class XSensDriver(Node):
 #             except KeyError:
 #                 pass
 
-#         def find_handler_name(name):
-#             return "fill_from_%s" % (name.replace(" ", "_"))
+        def find_handler_name(name):
+            return "fill_from_%s" % (name.replace(" ", "_"))
 
-#         # get data
-#         try:
-#             data = self.mt.read_measurement()
-#         except mtdef.MTTimeoutException:
-#             time.sleep(0.1)
-#             return
-#         # common header
-#         self.h = Header()
-#         self.h.stamp = rospy.Time.now()
-#         self.h.frame_id = self.frame_id
+        print("!!! Start !!!")
+        # get data
+        try:
+            data = self.mt.read_measurement()
+        except mtdef.MTTimeoutException:
+            time.sleep(0.1)
+            return
+        # common header
+        self.h = Header()
+        self.h.stamp = self.get_clock().now()
+        self.h.frame_id = self.frame_id
 
-#         # set default values
-#         self.reset_vars()
+        # set default values
+        self.reset_vars()
 
-#         # fill messages based on available data fields
-#         for n, o in data.items():
-#             try:
-#                 locals()[find_handler_name(n)](o)
-#             except KeyError:
-#                 rospy.logwarn("Unknown MTi data packet: '%s', ignoring." % n)
+        # fill messages based on available data fields
+        for n, o in data.items():
+            try:
+                locals()[find_handler_name(n)](o)
+            except KeyError:
+                self.get_logger().warning("Unknown MTi data packet: '%s', ignoring." % n)
 
-#         # publish available information
-#         if self.pub_imu:
-#             self.imu_msg.header = self.h
-#             if self.imu_pub is None:
-#                 self.imu_pub = rospy.Publisher('imu/data', Imu, queue_size=10)
-#             self.imu_pub.publish(self.imu_msg)
-#         if self.pub_raw_gps:
-#             self.raw_gps_msg.header = self.h
-#             if self.raw_gps_pub is None:
-#                 self.raw_gps_pub = rospy.Publisher('raw_fix', NavSatFix, queue_size=10)
-#             self.raw_gps_pub.publish(self.raw_gps_msg)
-#         if self.pub_pos_gps:
-#             self.pos_gps_msg.header = self.h
-#             if self.pos_gps_pub is None:
-#                 self.pos_gps_pub = rospy.Publisher('fix', NavSatFix, queue_size=10)
-#             self.pos_gps_pub.publish(self.pos_gps_msg)
-#         if self.pub_vel:
-#             self.vel_msg.header = self.h
-#             if self.vel_pub is None:
-#                 self.vel_pub = rospy.Publisher('velocity', TwistStamped,
-#                                                queue_size=10)
-#             self.vel_pub.publish(self.vel_msg)
-#         if self.pub_mag:
-#             self.mag_msg.header = self.h
-#             if self.mag_pub is None:
-#                 self.mag_pub = rospy.Publisher('imu/mag', MagneticField,
-#                                                queue_size=10)
-#             self.mag_pub.publish(self.mag_msg)
-#         if self.pub_temp:
-#             self.temp_msg.header = self.h
-#             if self.temp_pub is None:
-#                 self.temp_pub = rospy.Publisher('temperature', Temperature,
-#                                                 queue_size=10)
-#             self.temp_pub.publish(self.temp_msg)
-#         if self.pub_press:
-#             self.press_msg.header = self.h
-#             if self.press_pub is None:
-#                 self.press_pub = rospy.Publisher('pressure', FluidPressure,
-#                                                  queue_size=10)
-#             self.press_pub.publish(self.press_msg)
-#         if self.pub_anin1:
-#             if self.analog_in1_pub is None:
-#                 self.analog_in1_pub = rospy.Publisher('analog_in1',
-#                                                       UInt16, queue_size=10)
-#             self.analog_in1_pub.publish(self.anin1_msg)
-#         if self.pub_anin2:
-#             if self.analog_in2_pub is None:
-#                 self.analog_in2_pub = rospy.Publisher('analog_in2', UInt16,
-#                                                       queue_size=10)
-#             self.analog_in2_pub.publish(self.anin2_msg)
-#         if self.pub_ecef:
-#             self.ecef_msg.header = self.h
-#             if self.ecef_pub is None:
-#                 self.ecef_pub = rospy.Publisher('ecef', PointStamped,
-#                                                 queue_size=10)
-#             self.ecef_pub.publish(self.ecef_msg)
-#         if self.pub_diag:
-#             self.diag_msg.header = self.h
-#             if self.diag_pub is None:
-#                 self.diag_pub = rospy.Publisher('/diagnostics',
-#                                                 DiagnosticArray, queue_size=10)
-#             self.diag_pub.publish(self.diag_msg)
-#         # publish string representation
-#         self.str_pub.publish(str(data))
+        # publish available information
+        if self.pub_imu:
+            self.imu_msg.header = self.h
+            if self.imu_pub is None:
+                self.imu_pub = self.create_publisher(Imu, 'imu/data', 10)
+            self.imu_pub.publish(self.imu_msg)
+        if self.pub_raw_gps:
+            self.raw_gps_msg.header = self.h
+            if self.raw_gps_pub is None:
+                self.raw_gps_pub = self.create_publisher(NavSatFix, 'raw_fix', 10)
+            self.raw_gps_pub.publish(self.raw_gps_msg)
+        if self.pub_pos_gps:
+            self.pos_gps_msg.header = self.h
+            if self.pos_gps_pub is None:
+                self.pos_gps_pub = self.create_publisher(NavSatFix, 'fix', 10)
+            self.pos_gps_pub.publish(self.pos_gps_msg)
+        if self.pub_vel:
+            self.vel_msg.header = self.h
+            if self.vel_pub is None:
+                self.vel_pub = self.create_publisher(TwistStamped, 'velocity', 10)
+            self.vel_pub.publish(self.vel_msg)
+        if self.pub_mag:
+            self.mag_msg.header = self.h
+            if self.mag_pub is None:
+                self.mag_pub = self.create_publisher(MagneticField, 'imu/mag', 10)
+            self.mag_pub.publish(self.mag_msg)
+        if self.pub_temp:
+            self.temp_msg.header = self.h
+            if self.temp_pub is None:
+                self.temp_pub = self.create_publisher(Temperature, 'temperature', 10)
+            self.temp_pub.publish(self.temp_msg)
+        if self.pub_press:
+            self.press_msg.header = self.h
+            if self.press_pub is None:
+                self.press_pub = self.create_publisher(FluidPressure, 'pressure', 10)
+            self.press_pub.publish(self.press_msg)
+        if self.pub_anin1:
+            if self.analog_in1_pub is None:
+                self.analog_in1_pub = self.create_publisher(UInt16, 'analog_in1', 10)
+            self.analog_in1_pub.publish(self.anin1_msg)
+        if self.pub_anin2:
+            if self.analog_in2_pub is None:
+                self.analog_in2_pub = self.create_publisher(UInt16, 'analog_in2', 10)
+            self.analog_in2_pub.publish(self.anin2_msg)
+        if self.pub_ecef:
+            self.ecef_msg.header = self.h
+            if self.ecef_pub is None:
+                self.ecef_pub = self.create_publisher(PointStamped, 'ecef', 10)
+            self.ecef_pub.publish(self.ecef_msg)
+        if self.pub_diag:
+            self.diag_msg.header = self.h
+            if self.diag_pub is None:
+                self.diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+            self.diag_pub.publish(self.diag_msg)
+        # publish string representation
+        self.str_pub.publish(str(data))
+        
+        print("!!! Finish !!!")
 
 
 def main(args=None):
