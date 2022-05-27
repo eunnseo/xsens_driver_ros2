@@ -23,6 +23,10 @@ class MTDevice(object):
     def __init__(self, port, baudrate=115200, timeout=0.002, autoconf=True,
                  config_mode=False, verbose=False, initial_wait=0.1):
         """Open device."""
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print("!!! MTDevice construtction start !!!")
+        print("port = ", port, " / baudrate = ", baudrate, " / timeout = ", timeout)
+
         self.verbose = verbose
         # serial interface to the device
         try:
@@ -54,12 +58,14 @@ class MTDevice(object):
         if config_mode:
             self.GoToConfig()
 
+        print("!!! MTDevice construtction end !!!")
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
     ############################################################
     # Low-level communication
     ############################################################
     def write_msg(self, mid, data=b''):
         """Low-level message sending function."""
-        print("\twrite_msg..")
         length = len(data)
         if length > 254:
             lendat = b'\xFF' + struct.pack('!H', length)
@@ -69,14 +75,8 @@ class MTDevice(object):
 
         ##### Troubleshooting #####
         ##### "TypeError: ord() expected string of length 1, but int found" #####
-        # print("\tpacket = ", packet)
-        # print("\tpacket[1:] = ", packet[1:])
-        # map_tmp = map(ord, packet[1:])
-        # print("\tmap_tmp = ", map_tmp)
-        sum_tmp = sum(packet[1:])
-        # print("\tsum_tmp = ", sum_tmp)
-        packet += struct.pack('!B', 0xFF & (-(sum_tmp)))
         # packet += struct.pack('!B', 0xFF & (-(sum(map(ord, packet[1:])))))
+        packet += struct.pack('!B', 0xFF & (-(sum(bytearray(packet[1:])))))
         ##### Troubleshooting #####
 
         msg = packet
@@ -185,14 +185,12 @@ class MTDevice(object):
                     break
                 elif self.verbose:
                     print("ack (0x%02X) expected, got 0x%02X instead" % (mid+1, mid_ack))
-                else:  # inner look not broken
-                    continue  # retry (send+wait)
-                break  # still no luck
-            else:
-                n_retries = n_resend*n_read
-                raise MTException("Ack (0x%02X) expected, MID 0x%02X received "
-                                "instead (after %d retries)." % (mid+1, mid_ack,
-                                                                n_retries))
+            else:  # inner look not broken
+                continue  # retry (send+wait)
+            break  # still no luck
+        else:
+            n_retries = n_resend*n_read
+            raise MTException("Ack (0x%02X) expected, MID 0x%02X received instead (after %d retries)." % (mid+1, mid_ack, n_retries))
         return data_ack
 
     def _ensure_config_state(self):
@@ -702,6 +700,7 @@ class MTDevice(object):
         return self.mode, self.settings, self.length
 
     def read_measurement(self, mode=None, settings=None):
+        print("read_measurement..")
         self._ensure_measurement_state()
         # getting data
         # data = self.read_data_msg()
@@ -1188,7 +1187,8 @@ class MTDevice(object):
 def find_devices(timeout=0.002, verbose=False, initial_wait=0.1):
     print("find_devices..")
     mtdev_list = []
-    for port in glob.glob("/dev/tty*S*"):
+    # for port in glob.glob("/dev/tty*S*"):
+    for port in glob.glob("/dev/ttyUSB0"):
         if verbose:
             print("Trying '%s'" % port)
         try:

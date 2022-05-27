@@ -22,24 +22,70 @@ import serial
 
 import struct
 
-# # transform Euler angles or matrix into quaternions
+# transform Euler angles or matrix into quaternions
 from math import radians, sqrt, atan2
-# from tf.transformations import quaternion_from_matrix, quaternion_from_euler,\
-#     identity_matrix
-
+import numpy as np
+# -> tf.transformations Troubleshooting
+# from tf_transformations import quaternion_from_matrix, quaternion_from_euler, identity_matrix
+import transforms3d
+import tf2_py
+# import tf_transformations
 
 def matrix_from_diagonal(diagonal):
     n = len(diagonal)
-    matrix = [0] * n * n
+    matrix = np.zeros(shape=(n*n))
     for i in range(0, n):
         matrix[i*n + i] = diagonal[i]
-    return tuple(matrix)
+    return matrix
+
+# TODO: tf_transformations library에서 제공하는 함수로 교체
+# def quaternion_from_euler(roll, pitch, yaw):
+#     """
+#     Convert an Euler angle to a quaternion.
+
+#     Input
+#         :param roll: The roll (rotation around x-axis) angle in radians.
+#         :param pitch: The pitch (rotation around y-axis) angle in radians.
+#         :param yaw: The yaw (rotation around z-axis) angle in radians.
+
+#     Output
+#         :return qx, qy, qz, qw: The orientation in quaternion [x,y,z,w] format
+#     """
+#     qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+#     qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
+#     qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
+#     qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
+
+#     return qx, qy, qz, qw
+
+# def quaternion_from_matrix(mat):
+#     """
+#     Covert a quaternion into a full three-dimensional rotation matrix.
+ 
+#     Input
+#     :param mat: A 3x3 element matrix representing the full 3D rotation matrix. 
+#                 This rotation matrix converts a point in the local reference 
+#                 frame to a point in the global reference frame.
+ 
+#     Output
+#     :return qx, qy, qz, qw: The orientation in quaternion [x,y,z,w] format
+#     """
+#     qw = sqrt(1.0 + mat[0,0] + mat[1,1] + mat[2,2]) / 2.0
+#     w4 = 4.0 * qw
+#     qx = (mat[2,1] - mat[1,2]) / w4
+#     qy = (mat[0,2] - mat[2,0]) / w4
+#     qz = (mat[1,0] - mat[0,1]) / w4
+
+#     return qx, qy, qz, qw
 
 
 class XSensDriver(Node):
 
     def __init__(self):
         super().__init__('xsens_driver_ros2')
+
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print("!!! XSensDriver construtction start !!!")
 
         device = self.get_param('device', 'auto')
         baudrate = self.get_param('baudrate', 0)
@@ -68,6 +114,7 @@ class XSensDriver(Node):
             return
 
         self.get_logger().info("MT node interface: %s at %d bd." % (device, baudrate))
+        print("\nMT node interface: %s at %d bd.\n" % (device, baudrate))
         self.mt = mtdevice.MTDevice(device, baudrate, timeout,
                                     initial_wait=initial_wait)
 
@@ -75,22 +122,23 @@ class XSensDriver(Node):
         # (only mark iv devices)
         no_rotation_duration = self.get_param('no_rotation_duration', 0)
         if no_rotation_duration:
+            print("no_rotation_duration")
             self.get_logger().info("Starting the no-rotation procedure to estimate the "
                           "gyroscope biases for %d s. Please don't move the "
                           "IMU during this time." % no_rotation_duration)
             self.mt.SetNoRotation(no_rotation_duration)
 
-        frame_id = self.get_param('frame_id', '/base_imu')
+        self.frame_id = self.get_param('frame_id', '/base_imu')
 
-        frame_local = self.get_param('frame_local', 'ENU')
+        self.frame_local = self.get_param('frame_local', 'ENU')
 
-        angular_velocity_covariance = matrix_from_diagonal(
+        self.angular_velocity_covariance = matrix_from_diagonal(
             self.get_param_list('angular_velocity_covariance', [radians(0.025)] * 3)
         )
-        linear_acceleration_covariance = matrix_from_diagonal(
+        self.linear_acceleration_covariance = matrix_from_diagonal(
             self.get_param_list('linear_acceleration_covariance_diagonal', [0.0004] * 3)
         )
-        orientation_covariance = matrix_from_diagonal(
+        self.orientation_covariance = matrix_from_diagonal(
             self.get_param_list("orientation_covariance_diagonal", [radians(1.), radians(1.), radians(9.)])
         )
 
@@ -124,6 +172,9 @@ class XSensDriver(Node):
         self.last_delta_q_time = None
         self.delta_q_rate = None
 
+        print("!!! XSensDriver construtction end !!!")
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
     def get_param(self, name, default):
         try:
             self.declare_parameter(name, default)
@@ -143,7 +194,6 @@ class XSensDriver(Node):
         return value
 
     def reset_vars(self):
-        print("!!!reset_vars!!!")
         self.imu_msg = Imu()
         self.imu_msg.orientation_covariance = (-1., )*9
         self.imu_msg.angular_velocity_covariance = (-1., )*9
@@ -173,76 +223,74 @@ class XSensDriver(Node):
         self.pub_diag = False
 
     def spin(self):
-        print("!!!spin!!!")
-        self.spin_once()
-        self.reset_vars()
-        # try:
-        #     while rclpy.ok(): ## Troubleshooting
-        #         self.spin_once()
-        #         self.reset_vars()
-        #     print("!!!done!!!")
-        # # Ctrl-C signal interferes with select with the ROS signal handler
-        # # should be OSError in python 3.?
-        # except (select.error, OSError, serial.serialutil.SerialException):
-        #     pass
+        # print("\n\n!!! spin !!!")
+        # self.spin_once()
+        # self.reset_vars()
+        try:
+            while rclpy.ok():
+                self.spin_once()
+                self.reset_vars()
+        # Ctrl-C signal interferes with select with the ROS signal handler
+        # should be OSError in python 3.?
+        except (select.error, OSError, serial.serialutil.SerialException):
+            pass
 
     def spin_once(self):
         '''Read data from device and publishes ROS messages.'''
-        print("!!!spin_once!!!")
-#        def convert_coords(x, y, z, source, dest=self.frame_local):
-#             """Convert the coordinates between ENU, NED, and NWU."""
-#             if source == dest:
-#                 return x, y, z
-#             # convert to ENU
-#             if source == 'NED':
-#                 x, y, z = y, x, -z
-#             elif source == 'NWU':
-#                 x, y, z = -y, x, z
-#             # convert to desired
-#             if dest == 'NED':
-#                 x, y, z = y, x, -z
-#             elif dest == 'NWU':
-#                 x, y, z = y, -x, z
-#             return x, y, z
+        def convert_coords(x, y, z, source, dest=self.frame_local):
+            """Convert the coordinates between ENU, NED, and NWU."""
+            if source == dest:
+                return x, y, z
+            # convert to ENU
+            if source == 'NED':
+                x, y, z = y, x, -z
+            elif source == 'NWU':
+                x, y, z = -y, x, z
+            # convert to desired
+            if dest == 'NED':
+                x, y, z = y, x, -z
+            elif dest == 'NWU':
+                x, y, z = y, -x, z
+            return x, y, z
 
-#         def convert_quat(q, source, dest=self.frame_local):
-#             """Convert a quaternion between ENU, NED, and NWU."""
-#             def q_mult(q0, q1):
-#                 """Quaternion multiplication."""
-#                 w0, x0, y0, z0 = q0
-#                 w1, x1, y1, z1 = q1
-#                 w = w0*w1 - x0*x1 - y0*y1 - z0*z1
-#                 x = w0*x1 + x0*w1 + y0*z1 - z0*y1
-#                 y = w0*y1 - x0*z1 + y0*w1 + z0*x1
-#                 z = w0*z1 + x0*y1 - y0*x1 + z0*w1
-#                 return (w, x, y, z)
-#             q_enu_ned = (0, 1./sqrt(2), 1./sqrt(2), 0)
-#             q_enu_nwu = (1./sqrt(2), 0, 0, -1./sqrt(2))
-#             q_ned_nwu = (0, -1, 0, 0)
-#             q_ned_enu = (0, -1./sqrt(2), -1./sqrt(2), 0)
-#             q_nwu_enu = (1./sqrt(2), 0, 0, 1./sqrt(2))
-#             q_nwu_ned = (0, 1, 0, 0)
-#             if source == 'ENU':
-#                 if dest == 'ENU':
-#                     return q
-#                 elif dest == 'NED':
-#                     return q_mult(q_enu_ned, q)
-#                 elif dest == 'NWU':
-#                     return q_mult(q_enu_nwu, q)
-#             elif source == 'NED':
-#                 if dest == 'ENU':
-#                     return q_mult(q_ned_enu, q)
-#                 elif dest == 'NED':
-#                     return q
-#                 elif dest == 'NWU':
-#                     return q_mult(q_ned_nwu, q)
-#             elif source == 'NWU':
-#                 if dest == 'ENU':
-#                     return q_mult(q_nwu_enu, q)
-#                 elif dest == 'NED':
-#                     return q_mult(q_nwu_ned, q)
-#                 elif dest == 'NWU':
-#                     return q
+        def convert_quat(q, source, dest=self.frame_local):
+            """Convert a quaternion between ENU, NED, and NWU."""
+            def q_mult(q0, q1):
+                """Quaternion multiplication."""
+                w0, x0, y0, z0 = q0
+                w1, x1, y1, z1 = q1
+                w = w0*w1 - x0*x1 - y0*y1 - z0*z1
+                x = w0*x1 + x0*w1 + y0*z1 - z0*y1
+                y = w0*y1 - x0*z1 + y0*w1 + z0*x1
+                z = w0*z1 + x0*y1 - y0*x1 + z0*w1
+                return (w, x, y, z)
+            q_enu_ned = (0, 1./sqrt(2), 1./sqrt(2), 0)
+            q_enu_nwu = (1./sqrt(2), 0, 0, -1./sqrt(2))
+            q_ned_nwu = (0, -1, 0, 0)
+            q_ned_enu = (0, -1./sqrt(2), -1./sqrt(2), 0)
+            q_nwu_enu = (1./sqrt(2), 0, 0, 1./sqrt(2))
+            q_nwu_ned = (0, 1, 0, 0)
+            if source == 'ENU':
+                if dest == 'ENU':
+                    return q
+                elif dest == 'NED':
+                    return q_mult(q_enu_ned, q)
+                elif dest == 'NWU':
+                    return q_mult(q_enu_nwu, q)
+            elif source == 'NED':
+                if dest == 'ENU':
+                    return q_mult(q_ned_enu, q)
+                elif dest == 'NED':
+                    return q
+                elif dest == 'NWU':
+                    return q_mult(q_ned_nwu, q)
+            elif source == 'NWU':
+                if dest == 'ENU':
+                    return q_mult(q_nwu_enu, q)
+                elif dest == 'NED':
+                    return q_mult(q_nwu_ned, q)
+                elif dest == 'NWU':
+                    return q
 
         def publish_time_ref(secs, nsecs, source):
             """Publish a time reference."""
@@ -282,7 +330,7 @@ class XSensDriver(Node):
 #                 nsecs += 1e9
 #             return (secs, nsecs)
 
-#         # MTData
+#         ##### MTData #####
 #         def fill_from_RAW(raw_data):
 #             '''Fill messages with information from 'raw' MTData block.'''
 #             # don't publish raw imu data anymore
@@ -340,27 +388,32 @@ class XSensDriver(Node):
 #             except KeyError:
 #                 pass
 
-#         def fill_from_Orient(orient_data):
-#             '''Fill messages with information from 'orientation' MTData block.
-#             '''
-#             self.pub_imu = True
-#             if 'quaternion' in orient_data:
-#                 w, x, y, z = orient_data['quaternion']
-#             elif 'roll' in orient_data:
-#                 x, y, z, w = quaternion_from_euler(
-#                     radians(orient_data['roll']),
-#                     radians(orient_data['pitch']),
-#                     radians(orient_data['yaw']))
-#             elif 'matrix' in orient_data:
-#                 m = identity_matrix()
-#                 m[:3, :3] = orient_data['matrix']
-#                 x, y, z, w = quaternion_from_matrix(m)
-#             w, x, y, z = convert_quat((w, x, y, z), o['frame'])
-#             self.imu_msg.orientation.x = x
-#             self.imu_msg.orientation.y = y
-#             self.imu_msg.orientation.z = z
-#             self.imu_msg.orientation.w = w
-#             self.imu_msg.orientation_covariance = self.orientation_covariance
+        # def fill_from_Orient(orient_data):
+        #     '''Fill messages with information from 'orientation' MTData block.
+        #     '''
+        #     self.pub_imu = True
+        #     if 'quaternion' in orient_data:
+        #         w, x, y, z = orient_data['quaternion']
+        #     elif 'roll' in orient_data:
+        #         # x, y, z, w = quaternion_from_euler(
+        #         #     radians(orient_data['roll']),
+        #         #     radians(orient_data['pitch']),
+        #         #     radians(orient_data['yaw']))
+        #         x, y, z, w = transforms3d.euler.euler2quat(
+        #             radians(orient_data['roll']),
+        #             radians(orient_data['pitch']),
+        #             radians(orient_data['yaw']))
+        #     elif 'matrix' in orient_data:
+        #         # TODO: quaternion_from_matrix -> using transforms3d.euler lib
+        #         m = identity_matrix()
+        #         m[:3, :3] = orient_data['matrix']
+        #         x, y, z, w = quaternion_from_matrix(m)
+        #     w, x, y, z = convert_quat((w, x, y, z), o['frame'])
+        #     self.imu_msg.orientation.x = x
+        #     self.imu_msg.orientation.y = y
+        #     self.imu_msg.orientation.z = z
+        #     self.imu_msg.orientation.w = w
+        #     self.imu_msg.orientation_covariance = self.orientation_covariance
 
 #         def fill_from_Auxiliary(aux_data):
 #             '''Fill messages with information from 'Auxiliary' MTData block.'''
@@ -392,37 +445,37 @@ class XSensDriver(Node):
 #             self.vel_msg.twist.linear.y = y
 #             self.vel_msg.twist.linear.z = z
 
-#         def fill_from_Stat(status):
-#             '''Fill messages with information from 'status' MTData block.'''
-#             self.pub_diag = True
-#             if status & 0b0001:
-#                 self.stest_stat.level = DiagnosticStatus.OK
-#                 self.stest_stat.message = "Ok"
-#             else:
-#                 self.stest_stat.level = DiagnosticStatus.ERROR
-#                 self.stest_stat.message = "Failed"
-#             if status & 0b0010:
-#                 self.xkf_stat.level = DiagnosticStatus.OK
-#                 self.xkf_stat.message = "Valid"
-#             else:
-#                 self.xkf_stat.level = DiagnosticStatus.WARN
-#                 self.xkf_stat.message = "Invalid"
-#             if status & 0b0100:
-#                 self.gps_stat.level = DiagnosticStatus.OK
-#                 self.gps_stat.message = "Ok"
-#                 self.raw_gps_msg.status.status = NavSatStatus.STATUS_FIX
-#                 self.raw_gps_msg.status.service = NavSatStatus.SERVICE_GPS
-#                 # we borrow the status from the raw gps for pos_gps_msg
-#                 self.pos_gps_msg.status.status = NavSatStatus.STATUS_FIX
-#                 self.pos_gps_msg.status.service = NavSatStatus.SERVICE_GPS
-#             else:
-#                 self.gps_stat.level = DiagnosticStatus.WARN
-#                 self.gps_stat.message = "No fix"
-#                 self.raw_gps_msg.status.status = NavSatStatus.STATUS_NO_FIX
-#                 self.raw_gps_msg.status.service = 0
-#                 # we borrow the status from the raw gps for pos_gps_msg
-#                 self.pos_gps_msg.status.status = NavSatStatus.STATUS_NO_FIX
-#                 self.pos_gps_msg.status.service = 0
+        def fill_from_Stat(status):
+            '''Fill messages with information from 'status' MTData block.'''
+            self.pub_diag = True
+            if status & 0b0001:
+                self.stest_stat.level = DiagnosticStatus.OK
+                self.stest_stat.message = "Ok"
+            else:
+                self.stest_stat.level = DiagnosticStatus.ERROR
+                self.stest_stat.message = "Failed"
+            if status & 0b0010:
+                self.xkf_stat.level = DiagnosticStatus.OK
+                self.xkf_stat.message = "Valid"
+            else:
+                self.xkf_stat.level = DiagnosticStatus.WARN
+                self.xkf_stat.message = "Invalid"
+            if status & 0b0100:
+                self.gps_stat.level = DiagnosticStatus.OK
+                self.gps_stat.message = "Ok"
+                self.raw_gps_msg.status.status = NavSatStatus.STATUS_FIX
+                self.raw_gps_msg.status.service = NavSatStatus.SERVICE_GPS
+                # we borrow the status from the raw gps for pos_gps_msg
+                self.pos_gps_msg.status.status = NavSatStatus.STATUS_FIX
+                self.pos_gps_msg.status.service = NavSatStatus.SERVICE_GPS
+            else:
+                self.gps_stat.level = DiagnosticStatus.WARN
+                self.gps_stat.message = "No fix"
+                self.raw_gps_msg.status.status = NavSatStatus.STATUS_NO_FIX
+                self.raw_gps_msg.status.service = 0
+                # we borrow the status from the raw gps for pos_gps_msg
+                self.pos_gps_msg.status.status = NavSatStatus.STATUS_NO_FIX
+                self.pos_gps_msg.status.service = 0
 
 #         def fill_from_Sample(ts):
 #             '''Catch 'Sample' MTData blocks.'''
@@ -469,34 +522,41 @@ class XSensDriver(Node):
 #             # TODO find what to do with other kind of information
 #             pass
 
-#         def fill_from_Orientation_Data(o):
-#             '''Fill messages with information from 'Orientation Data' MTData2
-#             block.'''
-#             self.pub_imu = True
-#             try:
-#                 x, y, z, w = o['Q1'], o['Q2'], o['Q3'], o['Q0']
-#             except KeyError:
-#                 pass
-#             try:
-#                 x, y, z, w = quaternion_from_euler(radians(o['Roll']),
-#                                                    radians(o['Pitch']),
-#                                                    radians(o['Yaw']))
-#             except KeyError:
-#                 pass
-#             try:
-#                 a, b, c, d, e, f, g, h, i = o['a'], o['b'], o['c'], o['d'],\
-#                     o['e'], o['f'], o['g'], o['h'], o['i']
-#                 m = identity_matrix()
-#                 m[:3, :3] = ((a, b, c), (d, e, f), (g, h, i))
-#                 x, y, z, w = quaternion_from_matrix(m)
-#             except KeyError:
-#                 pass
-#             w, x, y, z = convert_quat((w, x, y, z), o['frame'])
-#             self.imu_msg.orientation.x = x
-#             self.imu_msg.orientation.y = y
-#             self.imu_msg.orientation.z = z
-#             self.imu_msg.orientation.w = w
-#             self.imu_msg.orientation_covariance = self.orientation_covariance
+        def fill_from_Orientation_Data(o):
+            '''Fill messages with information from 'Orientation Data' MTData2
+            block.'''
+            print("fill_from_Orientation_Data..")
+            self.pub_imu = True
+            try:
+                x, y, z, w = o['Q1'], o['Q2'], o['Q3'], o['Q0']
+            except KeyError:
+                pass
+            try:
+                # x, y, z, w = quaternion_from_euler(radians(o['Roll']),
+                #                                    radians(o['Pitch']),
+                #                                    radians(o['Yaw']))
+                w, x, y, z = transforms3d.euler.euler2quat(radians(o['Roll']),
+                                                           radians(o['Pitch']),
+                                                           radians(o['Yaw']))
+            except KeyError:
+                pass
+            try:
+                a, b, c, d, e, f, g, h, i = o['a'], o['b'], o['c'], o['d'],\
+                    o['e'], o['f'], o['g'], o['h'], o['i']
+                # m = identity_matrix()
+                # m[:3, :3] = ((a, b, c), (d, e, f), (g, h, i))
+                # x, y, z, w = quaternion_from_matrix(m)
+                m = np.array([[a, b, c], [d, e, f], [g, h, i]])
+                al, be, ga = transforms3d.euler.mat2euler(m)
+                w, x, y, z = transforms3d.euler.euler2quat(al, be, ga)
+            except KeyError:
+                pass
+            w, x, y, z = convert_quat((w, x, y, z), o['frame'])
+            self.imu_msg.orientation.x = x
+            self.imu_msg.orientation.y = y
+            self.imu_msg.orientation.z = z
+            self.imu_msg.orientation.w = w
+            self.imu_msg.orientation_covariance = self.orientation_covariance
 
 #         def fill_from_Pressure(o):
 #             '''Fill messages with information from 'Pressure' MTData2 block.'''
@@ -526,26 +586,27 @@ class XSensDriver(Node):
 #             self.imu_msg.linear_acceleration.z = z
 #             self.imu_msg.linear_acceleration_covariance = self.linear_acceleration_covariance
 
-#         def fill_from_Position(o):
-#             '''Fill messages with information from 'Position' MTData2 block.'''
-#             try:
-#                 self.pos_gps_msg.latitude = o['lat']
-#                 self.pos_gps_msg.longitude = o['lon']
-#                 # altMsl is deprecated
-#                 alt = o.get('altEllipsoid', o.get('altMsl', 0))
-#                 self.pos_gps_msg.altitude = alt
-#                 self.pub_pos_gps = True
-#             except KeyError:
-#                 pass
-#             try:
-#                 x, y, z = o['ecefX'], o['ecefY'], o['ecefZ']
-#                 # TODO: ecef units not specified: might not be in meters!
-#                 self.ecef_msg.point.x = x
-#                 self.ecef_msg.point.y = y
-#                 self.ecef_msg.point.z = z
-#                 self.pub_ecef = True
-#             except KeyError:
-#                 pass
+        def fill_from_Position(o):
+            print("fill_from_Position")
+            '''Fill messages with information from 'Position' MTData2 block.'''
+            try:
+                self.pos_gps_msg.latitude = o['lat']
+                self.pos_gps_msg.longitude = o['lon']
+                # altMsl is deprecated
+                alt = o.get('altEllipsoid', o.get('altMsl', 0))
+                self.pos_gps_msg.altitude = alt
+                self.pub_pos_gps = True
+            except KeyError:
+                pass
+            try:
+                x, y, z = o['ecefX'], o['ecefY'], o['ecefZ']
+                # TODO: ecef units not specified: might not be in meters!
+                self.ecef_msg.point.x = x
+                self.ecef_msg.point.y = y
+                self.ecef_msg.point.z = z
+                self.pub_ecef = True
+            except KeyError:
+                pass
 
 #         def fill_from_GNSS(o):
 #             '''Fill messages with information from 'GNSS' MTData2 block.'''
@@ -579,61 +640,61 @@ class XSensDriver(Node):
 #                 pass
 #             # TODO publish Sat Info
 
-#         def fill_from_Angular_Velocity(o):
-#             '''Fill messages with information from 'Angular Velocity' MTData2
-#             block.'''
-#             try:
-#                 dqw, dqx, dqy, dqz = (o['Delta q0'], o['Delta q1'],
-#                     o['Delta q2'], o['Delta q3'])
-#                 now = self.get_clock().now()
-#                 if self.last_delta_q_time is None:
-#                     self.last_delta_q_time = now
-#                 else:
-#                     # update rate (filtering so as to account for lag variance)
-#                     delta_t = (now - self.last_delta_q_time).to_sec()
-#                     if self.delta_q_rate is None:
-#                         self.delta_q_rate = 1./delta_t
-#                     delta_t_filtered = .95/self.delta_q_rate + .05*delta_t
-#                     # rate in necessarily integer
-#                     self.delta_q_rate = round(1./delta_t_filtered)
-#                     self.last_delta_q_time = now
-#                     # relationship between \Delta q and velocity \bm{\omega}:
-#                     # \bm{w} = \Delta t . \bm{\omega}
-#                     # \theta = |\bm{w}|
-#                     # \Delta q = [cos{\theta/2}, sin{\theta/2)/\theta . \omega
-#                     # extract rotation angle over delta_t
-#                     ca_2, sa_2 = dqw, sqrt(dqx**2 + dqy**2 + dqz**2)
-#                     ca = ca_2**2 - sa_2**2
-#                     sa = 2*ca_2*sa_2
-#                     rotation_angle = atan2(sa, ca)
-#                     # compute rotation velocity
-#                     rotation_speed = rotation_angle * self.delta_q_rate
-#                     f = rotation_speed / sa_2
-#                     x, y, z = f*dqx, f*dqy, f*dqz
-#                     self.imu_msg.angular_velocity.x = x
-#                     self.imu_msg.angular_velocity.y = y
-#                     self.imu_msg.angular_velocity.z = z
-#                     self.imu_msg.angular_velocity_covariance = self.angular_velocity_covariance
-#                     self.pub_imu = True
-#                     self.vel_msg.twist.angular.x = x
-#                     self.vel_msg.twist.angular.y = y
-#                     self.vel_msg.twist.angular.z = z
-#                     self.pub_vel = True
-#             except KeyError:
-#                 pass
-#             try:
-#                 x, y, z = o['gyrX'], o['gyrY'], o['gyrZ']
-#                 self.imu_msg.angular_velocity.x = x
-#                 self.imu_msg.angular_velocity.y = y
-#                 self.imu_msg.angular_velocity.z = z
-#                 self.imu_msg.angular_velocity_covariance = self.angular_velocity_covariance
-#                 self.pub_imu = True
-#                 self.vel_msg.twist.angular.x = x
-#                 self.vel_msg.twist.angular.y = y
-#                 self.vel_msg.twist.angular.z = z
-#                 self.pub_vel = True
-#             except KeyError:
-#                 pass
+        def fill_from_Angular_Velocity(o):
+            '''Fill messages with information from 'Angular Velocity' MTData2
+            block.'''
+            try:
+                dqw, dqx, dqy, dqz = (o['Delta q0'], o['Delta q1'],
+                    o['Delta q2'], o['Delta q3'])
+                now = self.get_clock().now()
+                if self.last_delta_q_time is None:
+                    self.last_delta_q_time = now
+                else:
+                    # update rate (filtering so as to account for lag variance)
+                    delta_t = (now - self.last_delta_q_time).to_sec()
+                    if self.delta_q_rate is None:
+                        self.delta_q_rate = 1./delta_t
+                    delta_t_filtered = .95/self.delta_q_rate + .05*delta_t
+                    # rate in necessarily integer
+                    self.delta_q_rate = round(1./delta_t_filtered)
+                    self.last_delta_q_time = now
+                    # relationship between \Delta q and velocity \bm{\omega}:
+                    # \bm{w} = \Delta t . \bm{\omega}
+                    # \theta = |\bm{w}|
+                    # \Delta q = [cos{\theta/2}, sin{\theta/2)/\theta . \omega
+                    # extract rotation angle over delta_t
+                    ca_2, sa_2 = dqw, sqrt(dqx**2 + dqy**2 + dqz**2)
+                    ca = ca_2**2 - sa_2**2
+                    sa = 2*ca_2*sa_2
+                    rotation_angle = atan2(sa, ca)
+                    # compute rotation velocity
+                    rotation_speed = rotation_angle * self.delta_q_rate
+                    f = rotation_speed / sa_2
+                    x, y, z = f*dqx, f*dqy, f*dqz
+                    self.imu_msg.angular_velocity.x = x
+                    self.imu_msg.angular_velocity.y = y
+                    self.imu_msg.angular_velocity.z = z
+                    self.imu_msg.angular_velocity_covariance = self.angular_velocity_covariance
+                    self.pub_imu = True
+                    self.vel_msg.twist.angular.x = x
+                    self.vel_msg.twist.angular.y = y
+                    self.vel_msg.twist.angular.z = z
+                    self.pub_vel = True
+            except KeyError:
+                pass
+            try:
+                x, y, z = o['gyrX'], o['gyrY'], o['gyrZ']
+                self.imu_msg.angular_velocity.x = x
+                self.imu_msg.angular_velocity.y = y
+                self.imu_msg.angular_velocity.z = z
+                self.imu_msg.angular_velocity_covariance = self.angular_velocity_covariance
+                self.pub_imu = True
+                self.vel_msg.twist.angular.x = x
+                self.vel_msg.twist.angular.y = y
+                self.vel_msg.twist.angular.z = z
+                self.pub_vel = True
+            except KeyError:
+                pass
 
 #         def fill_from_GPS(o):
 #             '''Fill messages with information from 'GPS' MTData2 block.'''
@@ -694,29 +755,31 @@ class XSensDriver(Node):
 #             self.mag_msg.magnetic_field.z = z
 #             self.pub_mag = True
 
-#         def fill_from_Velocity(o):
-#             '''Fill messages with information from 'Velocity' MTData2 block.'''
-#             x, y, z = convert_coords(o['velX'], o['velY'], o['velZ'],
-#                                      o['frame'])
-#             self.vel_msg.twist.linear.x = x
-#             self.vel_msg.twist.linear.y = y
-#             self.vel_msg.twist.linear.z = z
-#             self.pub_vel = True
+        def fill_from_Velocity(o):
+            '''Fill messages with information from 'Velocity' MTData2 block.'''
+            x, y, z = convert_coords(o['velX'], o['velY'], o['velZ'],
+                                     o['frame'])
+            self.vel_msg.twist.linear.x = x
+            self.vel_msg.twist.linear.y = y
+            self.vel_msg.twist.linear.z = z
+            self.pub_vel = True
 
-#         def fill_from_Status(o):
-#             '''Fill messages with information from 'Status' MTData2 block.'''
-#             try:
-#                 status = o['StatusByte']
-#                 fill_from_Stat(status)
-#             except KeyError:
-#                 pass
-#             try:
-#                 status = o['StatusWord']
-#                 fill_from_Stat(status)
-#             except KeyError:
-#                 pass
+        def fill_from_Status(o):
+            '''Fill messages with information from 'Status' MTData2 block.'''
+            try:
+                status = o['StatusByte']
+                fill_from_Stat(status)
+            except KeyError:
+                pass
+            try:
+                status = o['StatusWord']
+                fill_from_Stat(status)
+            except KeyError:
+                pass
 
         def find_handler_name(name):
+            print("find_handler_name / name = ", name)
+            print("fill_from_%s" % (name.replace(" ", "_")))
             return "fill_from_%s" % (name.replace(" ", "_"))
 
         print("!!! Start !!!")
@@ -724,11 +787,12 @@ class XSensDriver(Node):
         try:
             data = self.mt.read_measurement()
         except mtdef.MTTimeoutException:
+            print("Error: mtdef.MTTimeoutException")
             time.sleep(0.1)
             return
         # common header
         self.h = Header()
-        self.h.stamp = self.get_clock().now()
+        self.h.stamp = self.get_clock().now().to_msg()
         self.h.frame_id = self.frame_id
 
         # set default values
@@ -796,9 +860,11 @@ class XSensDriver(Node):
                 self.diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
             self.diag_pub.publish(self.diag_msg)
         # publish string representation
-        self.str_pub.publish(str(data))
+        msg = String()
+        msg.data = str(data)
+        self.str_pub.publish(msg)
         
-        print("!!! Finish !!!")
+        print("!!! Finish !!!\n")
 
 
 def main(args=None):
