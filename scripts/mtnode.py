@@ -25,8 +25,6 @@ import struct
 # transform Euler angles or matrix into quaternions
 from math import radians, sqrt, atan2
 import numpy as np
-# -> tf.transformations Troubleshooting
-# from tf_transformations import quaternion_from_matrix, quaternion_from_euler, identity_matrix
 import transforms3d
 import tf2_py
 # import tf_transformations
@@ -37,46 +35,6 @@ def matrix_from_diagonal(diagonal):
     for i in range(0, n):
         matrix[i*n + i] = diagonal[i]
     return matrix
-
-# TODO: tf_transformations library에서 제공하는 함수로 교체
-# def quaternion_from_euler(roll, pitch, yaw):
-#     """
-#     Convert an Euler angle to a quaternion.
-
-#     Input
-#         :param roll: The roll (rotation around x-axis) angle in radians.
-#         :param pitch: The pitch (rotation around y-axis) angle in radians.
-#         :param yaw: The yaw (rotation around z-axis) angle in radians.
-
-#     Output
-#         :return qx, qy, qz, qw: The orientation in quaternion [x,y,z,w] format
-#     """
-#     qx = np.sin(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) - np.cos(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
-#     qy = np.cos(roll/2) * np.sin(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.cos(pitch/2) * np.sin(yaw/2)
-#     qz = np.cos(roll/2) * np.cos(pitch/2) * np.sin(yaw/2) - np.sin(roll/2) * np.sin(pitch/2) * np.cos(yaw/2)
-#     qw = np.cos(roll/2) * np.cos(pitch/2) * np.cos(yaw/2) + np.sin(roll/2) * np.sin(pitch/2) * np.sin(yaw/2)
-
-#     return qx, qy, qz, qw
-
-# def quaternion_from_matrix(mat):
-#     """
-#     Covert a quaternion into a full three-dimensional rotation matrix.
- 
-#     Input
-#     :param mat: A 3x3 element matrix representing the full 3D rotation matrix. 
-#                 This rotation matrix converts a point in the local reference 
-#                 frame to a point in the global reference frame.
- 
-#     Output
-#     :return qx, qy, qz, qw: The orientation in quaternion [x,y,z,w] format
-#     """
-#     qw = sqrt(1.0 + mat[0,0] + mat[1,1] + mat[2,2]) / 2.0
-#     w4 = 4.0 * qw
-#     qx = (mat[2,1] - mat[1,2]) / w4
-#     qy = (mat[0,2] - mat[2,0]) / w4
-#     qz = (mat[1,0] - mat[0,1]) / w4
-
-#     return qx, qy, qz, qw
 
 
 class XSensDriver(Node):
@@ -525,7 +483,6 @@ class XSensDriver(Node):
         def fill_from_Orientation_Data(o):
             '''Fill messages with information from 'Orientation Data' MTData2
             block.'''
-            print("fill_from_Orientation_Data..")
             self.pub_imu = True
             try:
                 x, y, z, w = o['Q1'], o['Q2'], o['Q3'], o['Q0']
@@ -778,11 +735,14 @@ class XSensDriver(Node):
                 pass
 
         def find_handler_name(name):
-            print("find_handler_name / name = ", name)
-            print("fill_from_%s" % (name.replace(" ", "_")))
+            # print("fill_from_%s" % (name.replace(" ", "_")))
             return "fill_from_%s" % (name.replace(" ", "_"))
 
-        print("!!! Start !!!")
+        #############################################
+        ### Start
+        #############################################
+        # print("!!! Start !!!")
+
         # get data
         try:
             data = self.mt.read_measurement()
@@ -864,7 +824,10 @@ class XSensDriver(Node):
         msg.data = str(data)
         self.str_pub.publish(msg)
         
-        print("!!! Finish !!!\n")
+        # print("!!! Finish !!!\n")
+        #############################################
+        ### End
+        #############################################
 
 
 def main(args=None):

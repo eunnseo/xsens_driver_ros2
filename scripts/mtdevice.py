@@ -700,7 +700,6 @@ class MTDevice(object):
         return self.mode, self.settings, self.length
 
     def read_measurement(self, mode=None, settings=None):
-        print("read_measurement..")
         self._ensure_measurement_state()
         # getting data
         # data = self.read_data_msg()
