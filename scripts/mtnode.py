@@ -263,32 +263,34 @@ class XSensDriver(Node):
             time_ref_msg.source = source
             self.time_ref_pub.publish(time_ref_msg)
 
-#         def stamp_from_itow(itow, y=None, m=None, d=None, ns=0, week=None):
-#             """Return (secs, nsecs) from GPS time of week ms information."""
-#             if y is not None:
-#                 stamp_day = datetime.datetime(y, m, d)
-#             elif week is not None:
-#                 epoch = datetime.datetime(1980, 1, 6)  # GPS epoch
-#                 stamp_day = epoch + datetime.timedelta(weeks=week)
-#             else:
-#                 today = datetime.date.today()  # using today by default
-#                 stamp_day = datetime.datetime(today.year, today.month,
-#                                               today.day)
-#             iso_day = stamp_day.isoweekday()  # 1 for Monday, 7 for Sunday
-#             # stamp for the GPS start of the week (Sunday morning)
-#             start_of_week = stamp_day - datetime.timedelta(days=iso_day)
-#             # stamp at the millisecond precision
-#             stamp_ms = start_of_week + datetime.timedelta(milliseconds=itow)
-#             secs = calendar.timegm((
-#                 stamp_ms.year, stamp_ms.month, stamp_ms.day, stamp_ms.hour,
-#                 stamp_ms.minute, stamp_ms.second, 0, 0, -1))
-#             nsecs = stamp_ms.microsecond * 1000 + ns
-#             if nsecs < 0:  # ns can be negative
-#                 secs -= 1
-#                 nsecs += 1e9
-#             return (secs, nsecs)
+        def stamp_from_itow(itow, y=None, m=None, d=None, ns=0, week=None):
+            """Return (secs, nsecs) from GPS time of week ms information."""
+            if y is not None:
+                stamp_day = datetime.datetime(y, m, d)
+            elif week is not None:
+                epoch = datetime.datetime(1980, 1, 6)  # GPS epoch
+                stamp_day = epoch + datetime.timedelta(weeks=week)
+            else:
+                today = datetime.date.today()  # using today by default
+                stamp_day = datetime.datetime(today.year, today.month,
+                                              today.day)
+            iso_day = stamp_day.isoweekday()  # 1 for Monday, 7 for Sunday
+            # stamp for the GPS start of the week (Sunday morning)
+            start_of_week = stamp_day - datetime.timedelta(days=iso_day)
+            # stamp at the millisecond precision
+            stamp_ms = start_of_week + datetime.timedelta(milliseconds=itow)
+            secs = calendar.timegm((
+                stamp_ms.year, stamp_ms.month, stamp_ms.day, stamp_ms.hour,
+                stamp_ms.minute, stamp_ms.second, 0, 0, -1))
+            nsecs = stamp_ms.microsecond * 1000 + ns
+            if nsecs < 0:  # ns can be negative
+                secs -= 1
+                nsecs += 1e9
+            return (secs, nsecs)
 
-#         ##### MTData #####
+#         #############################################
+#         ### MTData
+#         #############################################
 #         def fill_from_RAW(raw_data):
 #             '''Fill messages with information from 'raw' MTData block.'''
 #             # don't publish raw imu data anymore
@@ -439,46 +441,48 @@ class XSensDriver(Node):
 #             '''Catch 'Sample' MTData blocks.'''
 #             self.h.seq = ts
 
-#         # MTData2
-#         def fill_from_Temperature(o):
-#             '''Fill messages with information from 'Temperature' MTData2 block.
-#             '''
-#             self.pub_temp = True
-#             self.temp_msg.temperature = o['Temp']
+        #############################################
+        ### MTData2
+        #############################################
+        def fill_from_Temperature(o):
+            '''Fill messages with information from 'Temperature' MTData2 block.
+            '''
+            self.pub_temp = True
+            self.temp_msg.temperature = o['Temp']
 
-#         def fill_from_Timestamp(o):
-#             '''Fill messages with information from 'Timestamp' MTData2 block.
-#             '''
-#             try:
-#                 # put timestamp from gps UTC time if available
-#                 y, m, d, hr, mi, s, ns, f = o['Year'], o['Month'], o['Day'],\
-#                     o['Hour'], o['Minute'], o['Second'], o['ns'], o['Flags']
-#                 if f & 0x4:
-#                     secs = calendar.timegm((y, m, d, hr, mi, s, 0, 0, 0))
-#                     publish_time_ref(secs, ns, 'UTC time')
-#             except KeyError:
-#                 pass
-#             try:
-#                 itow = o['TimeOfWeek']
-#                 secs, nsecs = stamp_from_itow(itow)
-#                 publish_time_ref(secs, nsecs, 'integer time of week')
-#             except KeyError:
-#                 pass
-#             try:
-#                 sample_time_fine = o['SampleTimeFine']
-#                 # int in 10kHz ticks
-#                 secs = int(sample_time_fine / 10000)
-#                 nsecs = 1e5 * (sample_time_fine % 10000)
-#                 publish_time_ref(secs, nsecs, 'sample time fine')
-#             except KeyError:
-#                 pass
-#             try:
-#                 sample_time_coarse = o['SampleTimeCoarse']
-#                 publish_time_ref(sample_time_coarse, 0, 'sample time coarse')
-#             except KeyError:
-#                 pass
-#             # TODO find what to do with other kind of information
-#             pass
+        def fill_from_Timestamp(o):
+            '''Fill messages with information from 'Timestamp' MTData2 block.
+            '''
+            try:
+                # put timestamp from gps UTC time if available
+                y, m, d, hr, mi, s, ns, f = o['Year'], o['Month'], o['Day'],\
+                    o['Hour'], o['Minute'], o['Second'], o['ns'], o['Flags']
+                if f & 0x4:
+                    secs = calendar.timegm((y, m, d, hr, mi, s, 0, 0, 0))
+                    publish_time_ref(secs, ns, 'UTC time')
+            except KeyError:
+                pass
+            try:
+                itow = o['TimeOfWeek']
+                secs, nsecs = stamp_from_itow(itow)
+                publish_time_ref(secs, nsecs, 'integer time of week')
+            except KeyError:
+                pass
+            try:
+                sample_time_fine = o['SampleTimeFine']
+                # int in 10kHz ticks
+                secs = int(sample_time_fine / 10000)
+                nsecs = 1e5 * (sample_time_fine % 10000)
+                publish_time_ref(secs, nsecs, 'sample time fine')
+            except KeyError:
+                pass
+            try:
+                sample_time_coarse = o['SampleTimeCoarse']
+                publish_time_ref(sample_time_coarse, 0, 'sample time coarse')
+            except KeyError:
+                pass
+            # TODO find what to do with other kind of information
+            pass
 
         def fill_from_Orientation_Data(o):
             '''Fill messages with information from 'Orientation Data' MTData2
@@ -498,6 +502,7 @@ class XSensDriver(Node):
             except KeyError:
                 pass
             try:
+                # TODO: 수식 검토 (eunseo)
                 a, b, c, d, e, f, g, h, i = o['a'], o['b'], o['c'], o['d'],\
                     o['e'], o['f'], o['g'], o['h'], o['i']
                 # m = identity_matrix()
@@ -515,33 +520,33 @@ class XSensDriver(Node):
             self.imu_msg.orientation.w = w
             self.imu_msg.orientation_covariance = self.orientation_covariance
 
-#         def fill_from_Pressure(o):
-#             '''Fill messages with information from 'Pressure' MTData2 block.'''
-#             self.press_msg.fluid_pressure = o['Pressure']
-#             self.pub_press = True
+        def fill_from_Pressure(o):
+            '''Fill messages with information from 'Pressure' MTData2 block.'''
+            self.press_msg.fluid_pressure = o['Pressure']
+            self.pub_press = True
 
-#         def fill_from_Acceleration(o):
-#             '''Fill messages with information from 'Acceleration' MTData2
-#             block.'''
-#             self.pub_imu = True
+        def fill_from_Acceleration(o):
+            '''Fill messages with information from 'Acceleration' MTData2
+            block.'''
+            self.pub_imu = True
 
-#             # FIXME not sure we should treat all in that same way
-#             try:
-#                 x, y, z = o['Delta v.x'], o['Delta v.y'], o['Delta v.z']
-#             except KeyError:
-#                 pass
-#             try:
-#                 x, y, z = o['freeAccX'], o['freeAccY'], o['freeAccZ']
-#             except KeyError:
-#                 pass
-#             try:
-#                 x, y, z = o['accX'], o['accY'], o['accZ']
-#             except KeyError:
-#                 pass
-#             self.imu_msg.linear_acceleration.x = x
-#             self.imu_msg.linear_acceleration.y = y
-#             self.imu_msg.linear_acceleration.z = z
-#             self.imu_msg.linear_acceleration_covariance = self.linear_acceleration_covariance
+            # FIXME not sure we should treat all in that same way
+            try:
+                x, y, z = o['Delta v.x'], o['Delta v.y'], o['Delta v.z']
+            except KeyError:
+                pass
+            try:
+                x, y, z = o['freeAccX'], o['freeAccY'], o['freeAccZ']
+            except KeyError:
+                pass
+            try:
+                x, y, z = o['accX'], o['accY'], o['accZ']
+            except KeyError:
+                pass
+            self.imu_msg.linear_acceleration.x = x
+            self.imu_msg.linear_acceleration.y = y
+            self.imu_msg.linear_acceleration.z = z
+            self.imu_msg.linear_acceleration_covariance = self.linear_acceleration_covariance
 
         def fill_from_Position(o):
             print("fill_from_Position")
@@ -565,44 +570,44 @@ class XSensDriver(Node):
             except KeyError:
                 pass
 
-#         def fill_from_GNSS(o):
-#             '''Fill messages with information from 'GNSS' MTData2 block.'''
-#             try:  # PVT
-#                 # time block
-#                 itow, y, m, d, ns, f = o['itow'], o['year'], o['month'],\
-#                     o['day'], o['nano'], o['valid']
-#                 if f & 0x4:
-#                     secs, nsecs = stamp_from_itow(itow, y, m, d, ns)
-#                     publish_time_ref(secs, nsecs, 'GNSS time UTC')
-#                 # flags
-#                 fixtype = o['fixtype']
-#                 if fixtype == 0x00:
-#                     # no fix
-#                     self.raw_gps_msg.status.status = NavSatStatus.STATUS_NO_FIX
-#                     self.raw_gps_msg.status.service = 0
-#                 else:
-#                     # unaugmented
-#                     self.raw_gps_msg.status.status = NavSatStatus.STATUS_FIX
-#                     self.raw_gps_msg.status.service = NavSatStatus.SERVICE_GPS
-#                 # lat lon alt
-#                 self.raw_gps_msg.latitude = o['lat']
-#                 self.raw_gps_msg.longitude = o['lon']
-#                 self.raw_gps_msg.altitude = o['height']/1e3
-#                 # TODO should we separate raw_gps and GNSS?
-#                 self.pub_raw_gps = True
-#                 # TODO velocity?
-#                 # TODO 2D heading?
-#                 # TODO DOP?
-#             except KeyError:
-#                 pass
-#             # TODO publish Sat Info
+        def fill_from_GNSS(o):
+            '''Fill messages with information from 'GNSS' MTData2 block.'''
+            try:  # PVT
+                # time block
+                itow, y, m, d, ns, f = o['itow'], o['year'], o['month'],\
+                    o['day'], o['nano'], o['valid']
+                if f & 0x4:
+                    secs, nsecs = stamp_from_itow(itow, y, m, d, ns)
+                    publish_time_ref(secs, nsecs, 'GNSS time UTC')
+                # flags
+                fixtype = o['fixtype']
+                if fixtype == 0x00:
+                    # no fix
+                    self.raw_gps_msg.status.status = NavSatStatus.STATUS_NO_FIX
+                    self.raw_gps_msg.status.service = 0
+                else:
+                    # unaugmented
+                    self.raw_gps_msg.status.status = NavSatStatus.STATUS_FIX
+                    self.raw_gps_msg.status.service = NavSatStatus.SERVICE_GPS
+                # lat lon alt
+                self.raw_gps_msg.latitude = o['lat']
+                self.raw_gps_msg.longitude = o['lon']
+                self.raw_gps_msg.altitude = o['height']/1e3
+                # TODO should we separate raw_gps and GNSS?
+                self.pub_raw_gps = True
+                # TODO velocity?
+                # TODO 2D heading?
+                # TODO DOP?
+            except KeyError:
+                pass
+            # TODO publish Sat Info
 
         def fill_from_Angular_Velocity(o):
             '''Fill messages with information from 'Angular Velocity' MTData2
             block.'''
             try:
                 dqw, dqx, dqy, dqz = (o['Delta q0'], o['Delta q1'],
-                    o['Delta q2'], o['Delta q3'])
+                                      o['Delta q2'], o['Delta q3'])
                 now = self.get_clock().now()
                 if self.last_delta_q_time is None:
                     self.last_delta_q_time = now
@@ -653,64 +658,63 @@ class XSensDriver(Node):
             except KeyError:
                 pass
 
-#         def fill_from_GPS(o):
-#             '''Fill messages with information from 'GPS' MTData2 block.'''
-#             # TODO DOP
-#             try:    # SOL
-#                 x, y, z = o['ecefX'], o['ecefY'], o['ecefZ']
-#                 self.ecef_msg.point.x = x * 0.01  # data is in cm
-#                 self.ecef_msg.point.y = y * 0.01
-#                 self.ecef_msg.point.z = z * 0.01
-#                 self.pub_ecef = True
-#                 vx, vy, vz = o['ecefVX'], o['ecefVY'], o['ecefVZ']
-#                 self.vel_msg.twist.linear.x = vx * 0.01  # data is in cm
-#                 self.vel_msg.twist.linear.y = vy * 0.01
-#                 self.vel_msg.twist.linear.z = vz * 0.01
-#                 self.pub_vel = True
-#                 itow, ns, week, f = o['iTOW'], o['fTOW'], o['Week'], o['Flags']
-#                 if (f & 0x0C) == 0xC:
-#                     secs, nsecs = stamp_from_itow(itow, ns=ns, week=week)
-#                     publish_time_ref(secs, nsecs, 'GPS Time')
-#                 # TODO there are other pieces of information that we could
-#                 # publish
-#             except KeyError:
-#                 pass
-#             try:    # Time UTC
-#                 itow, y, m, d, ns, f = o['iTOW'], o['year'], o['month'],\
-#                     o['day'], o['nano'], o['valid']
-#                 if f & 0x4:
-#                     secs, nsecs = stamp_from_itow(itow, y, m, d, ns)
-#                     publish_time_ref(secs, nsecs, 'GPS Time UTC')
-#             except KeyError:
-#                 pass
-#             # TODO publish SV Info
+        def fill_from_GPS(o):
+            '''Fill messages with information from 'GPS' MTData2 block.'''
+            # TODO DOP
+            try:    # SOL
+                x, y, z = o['ecefX'], o['ecefY'], o['ecefZ']
+                self.ecef_msg.point.x = x * 0.01  # data is in cm
+                self.ecef_msg.point.y = y * 0.01
+                self.ecef_msg.point.z = z * 0.01
+                self.pub_ecef = True
+                vx, vy, vz = o['ecefVX'], o['ecefVY'], o['ecefVZ']
+                self.vel_msg.twist.linear.x = vx * 0.01  # data is in cm
+                self.vel_msg.twist.linear.y = vy * 0.01
+                self.vel_msg.twist.linear.z = vz * 0.01
+                self.pub_vel = True
+                itow, ns, week, f = o['iTOW'], o['fTOW'], o['Week'], o['Flags']
+                if (f & 0x0C) == 0xC:
+                    secs, nsecs = stamp_from_itow(itow, ns=ns, week=week)
+                    publish_time_ref(secs, nsecs, 'GPS Time')
+                # TODO there are other pieces of information that we could
+                # publish
+            except KeyError:
+                pass
+            try:    # Time UTC
+                itow, y, m, d, ns, f = o['iTOW'], o['year'], o['month'], o['day'], o['nano'], o['valid']
+                if f & 0x4:
+                    secs, nsecs = stamp_from_itow(itow, y, m, d, ns)
+                    publish_time_ref(secs, nsecs, 'GPS Time UTC')
+            except KeyError:
+                pass
+            # TODO publish SV Info
 
-#         def fill_from_SCR(o):
-#             '''Fill messages with information from 'SCR' MTData2 block.'''
-#             # TODO that's raw information
-#             pass
+        def fill_from_SCR(o):
+            '''Fill messages with information from 'SCR' MTData2 block.'''
+            # TODO that's raw information
+            pass
 
-#         def fill_from_Analog_In(o):
-#             '''Fill messages with information from 'Analog In' MTData2 block.
-#             '''
-#             try:
-#                 self.anin1_msg.data = o['analogIn1']
-#                 self.pub_anin1 = True
-#             except KeyError:
-#                 pass
-#             try:
-#                 self.anin2_msg.data = o['analogIn2']
-#                 self.pub_anin2 = True
-#             except KeyError:
-#                 pass
+        def fill_from_Analog_In(o):
+            '''Fill messages with information from 'Analog In' MTData2 block.
+            '''
+            try:
+                self.anin1_msg.data = o['analogIn1']
+                self.pub_anin1 = True
+            except KeyError:
+                pass
+            try:
+                self.anin2_msg.data = o['analogIn2']
+                self.pub_anin2 = True
+            except KeyError:
+                pass
 
-#         def fill_from_Magnetic(o):
-#             '''Fill messages with information from 'Magnetic' MTData2 block.'''
-#             x, y, z = o['magX'], o['magY'], o['magZ']
-#             self.mag_msg.magnetic_field.x = x
-#             self.mag_msg.magnetic_field.y = y
-#             self.mag_msg.magnetic_field.z = z
-#             self.pub_mag = True
+        def fill_from_Magnetic(o):
+            '''Fill messages with information from 'Magnetic' MTData2 block.'''
+            x, y, z = o['magX'], o['magY'], o['magZ']
+            self.mag_msg.magnetic_field.x = x
+            self.mag_msg.magnetic_field.y = y
+            self.mag_msg.magnetic_field.z = z
+            self.pub_mag = True
 
         def fill_from_Velocity(o):
             '''Fill messages with information from 'Velocity' MTData2 block.'''
@@ -823,7 +827,7 @@ class XSensDriver(Node):
         msg = String()
         msg.data = str(data)
         self.str_pub.publish(msg)
-        
+
         # print("!!! Finish !!!\n")
         #############################################
         ### End
@@ -833,7 +837,7 @@ class XSensDriver(Node):
 def main(args=None):
     '''Create a ROS node and instantiate the class.'''
     rclpy.init(args=args)
-    
+
     # rospy.init_node('xsens_driver')
     driver = XSensDriver()
     driver.spin()
