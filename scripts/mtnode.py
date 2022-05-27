@@ -42,8 +42,8 @@ class XSensDriver(Node):
     def __init__(self):
         super().__init__('xsens_driver_ros2')
 
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        print("!!! XSensDriver construtction start !!!")
+        # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # print("!!! XSensDriver construtction start !!!")
 
         device = self.get_param('device', 'auto')
         baudrate = self.get_param('baudrate', 0)
@@ -72,7 +72,6 @@ class XSensDriver(Node):
             return
 
         self.get_logger().info("MT node interface: %s at %d bd." % (device, baudrate))
-        print("\nMT node interface: %s at %d bd.\n" % (device, baudrate))
         self.mt = mtdevice.MTDevice(device, baudrate, timeout,
                                     initial_wait=initial_wait)
 
@@ -130,8 +129,8 @@ class XSensDriver(Node):
         self.last_delta_q_time = None
         self.delta_q_rate = None
 
-        print("!!! XSensDriver construtction end !!!")
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # print("!!! XSensDriver construtction end !!!")
+        # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
     def get_param(self, name, default):
         try:

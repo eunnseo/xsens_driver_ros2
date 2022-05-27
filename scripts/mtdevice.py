@@ -23,9 +23,9 @@ class MTDevice(object):
     def __init__(self, port, baudrate=115200, timeout=0.002, autoconf=True,
                  config_mode=False, verbose=False, initial_wait=0.1):
         """Open device."""
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        print("!!! MTDevice construtction start !!!")
-        print("port = ", port, " / baudrate = ", baudrate, " / timeout = ", timeout)
+        # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # print("!!! MTDevice construtction start !!!")
+        # print("port = ", port, " / baudrate = ", baudrate, " / timeout = ", timeout)
 
         self.verbose = verbose
         # serial interface to the device
@@ -58,8 +58,8 @@ class MTDevice(object):
         if config_mode:
             self.GoToConfig()
 
-        print("!!! MTDevice construtction end !!!")
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # print("!!! MTDevice construtction end !!!")
+        # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
     ############################################################
     # Low-level communication
@@ -1184,10 +1184,9 @@ class MTDevice(object):
 # Auto detect port
 ################################################################
 def find_devices(timeout=0.002, verbose=False, initial_wait=0.1):
-    print("find_devices..")
     mtdev_list = []
-    # for port in glob.glob("/dev/tty*S*"):
-    for port in glob.glob("/dev/ttyUSB0"):
+    for port in glob.glob("/dev/tty*S*"):
+    # for port in glob.glob("/dev/ttyUSB0"):
         if verbose:
             print("Trying '%s'" % port)
         try:
@@ -1196,8 +1195,6 @@ def find_devices(timeout=0.002, verbose=False, initial_wait=0.1):
                 mtdev_list.append((port, br))
         except MTException:
             pass
-    print("find_devices done!")
-    print("mtdev_list = ", mtdev_list)
     return mtdev_list
 
 
