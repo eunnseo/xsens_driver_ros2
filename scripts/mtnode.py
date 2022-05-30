@@ -491,24 +491,17 @@ class XSensDriver(Node):
                 x, y, z, w = o['Q1'], o['Q2'], o['Q3'], o['Q0']
             except KeyError:
                 pass
-            try:
-                # x, y, z, w = quaternion_from_euler(radians(o['Roll']),
-                #                                    radians(o['Pitch']),
-                #                                    radians(o['Yaw']))
+            try: # euler -> quat
                 w, x, y, z = transforms3d.euler.euler2quat(radians(o['Roll']),
                                                            radians(o['Pitch']),
                                                            radians(o['Yaw']))
             except KeyError:
                 pass
-            try:
-                # TODO: 수식 검토 (eunseo)
+            try: # mat -> euler -> quat
                 a, b, c, d, e, f, g, h, i = o['a'], o['b'], o['c'], o['d'],\
                     o['e'], o['f'], o['g'], o['h'], o['i']
-                # m = identity_matrix()
-                # m[:3, :3] = ((a, b, c), (d, e, f), (g, h, i))
-                # x, y, z, w = quaternion_from_matrix(m)
-                m = np.array([[a, b, c], [d, e, f], [g, h, i]])
-                al, be, ga = transforms3d.euler.mat2euler(m)
+                mat = np.array([[a, b, c], [d, e, f], [g, h, i]])
+                al, be, ga = transforms3d.euler.mat2euler(mat)
                 w, x, y, z = transforms3d.euler.euler2quat(al, be, ga)
             except KeyError:
                 pass
