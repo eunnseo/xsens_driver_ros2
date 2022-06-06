@@ -106,7 +106,9 @@ class XSensDriver(Node):
                                          message='No status information')
         self.gps_stat = DiagnosticStatus(name='mtnode: GPS Fix', level=struct.pack("B", 1),
                                          message='No status information')
-        self.diag_msg.status = [self.stest_stat, self.xkf_stat, self.gps_stat]
+        self.rtk_stat = DiagnosticStatus(name='mtnode: RTK Status', level=struct.pack("B", 1),
+                                         message='No status information')
+        self.diag_msg.status = [self.stest_stat, self.xkf_stat, self.gps_stat, self.rtk_stat]
 
         # publishers created at first use to reduce topic clutter
         self.diag_pub = None
@@ -407,6 +409,17 @@ class XSensDriver(Node):
         def fill_from_Stat(status):
             '''Fill messages with information from 'status' MTData block.'''
             self.pub_diag = True
+            ##### rtk status #####
+            if status & 0x10000000: # StatusWord[27:28] = 10
+                self.rtk_stat.level = DiagnosticStatus.OK
+                self.rtk_stat.message = "RTK fixed"
+            elif status & 0x08000000: # StatusWord[27:28] = 01
+                self.rtk_stat.level = DiagnosticStatus.WARN
+                self.rtk_stat.message = "RTK floating"
+            else: # StatusWord[27:28] = 00
+                self.rtk_stat.level = DiagnosticStatus.ERROR
+                self.rtk_stat.message = "No RTK"
+            ######################
             if status & 0b0001:
                 self.stest_stat.level = DiagnosticStatus.OK
                 self.stest_stat.message = "Ok"
@@ -541,7 +554,6 @@ class XSensDriver(Node):
             self.imu_msg.linear_acceleration_covariance = self.linear_acceleration_covariance
 
         def fill_from_Position(o):
-            print("fill_from_Position")
             '''Fill messages with information from 'Position' MTData2 block.'''
             try:
                 self.pos_gps_msg.latitude = o['lat']
