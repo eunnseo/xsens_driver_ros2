@@ -72,13 +72,7 @@ class MTDevice(object):
         else:
             lendat = struct.pack('!B', length)
         packet = b'\xFA\xFF' + struct.pack('!B', mid) + lendat + data
-
-        ##### Troubleshooting #####
-        ##### "TypeError: ord() expected string of length 1, but int found" #####
-        # packet += struct.pack('!B', 0xFF & (-(sum(map(ord, packet[1:])))))
         packet += struct.pack('!B', 0xFF & (-(sum(bytearray(packet[1:])))))
-        ##### Troubleshooting #####
-
         msg = packet
         start = time.time()
         while ((time.time()-start) < self.timeout) and self.device.read():
