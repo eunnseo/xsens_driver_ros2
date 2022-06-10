@@ -23,11 +23,11 @@ ament_auto_find_build_dependencies()
 
 ament_auto_package(
   INSTALL_TO_SHARE
-    cfg
+    # cfg
     launch
 )
 
-install(PROGRAMS scripts/__init__.py scripts/xsens_driver_ros2.py scripts/mtdef.py
-                scripts/mtdevice.py scripts/mtnode.py DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS scripts/__init__.py scripts/mtdef.py scripts/mtdevice.py scripts/mtnode.py 
+        DESTINATION lib/${PROJECT_NAME})
 
 install(FILES DESTINATION share/${PROJECT_NAME})
