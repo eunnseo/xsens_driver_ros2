@@ -100,15 +100,16 @@ class XSensDriver(Node):
         )
 
         self.diag_msg = DiagnosticArray()
-        self.stest_stat = DiagnosticStatus(name='mtnode: Self Test', level=struct.pack("B", 1),
-                                           message='No status information')
-        self.xkf_stat = DiagnosticStatus(name='mtnode: XKF Valid', level=struct.pack("B", 1),
-                                         message='No status information')
-        self.gps_stat = DiagnosticStatus(name='mtnode: GPS Fix', level=struct.pack("B", 1),
-                                         message='No status information')
+        # self.stest_stat = DiagnosticStatus(name='mtnode: Self Test', level=struct.pack("B", 1),
+        #                                    message='No status information')
+        # self.xkf_stat = DiagnosticStatus(name='mtnode: XKF Valid', level=struct.pack("B", 1),
+        #                                  message='No status information')
+        # self.gps_stat = DiagnosticStatus(name='mtnode: GPS Fix', level=struct.pack("B", 1),
+        #                                  message='No status information')
         self.rtk_stat = DiagnosticStatus(name='mtnode: RTK Status', level=struct.pack("B", 1),
                                          message='No status information')
-        self.diag_msg.status = [self.stest_stat, self.xkf_stat, self.gps_stat, self.rtk_stat]
+        # self.diag_msg.status = [self.stest_stat, self.xkf_stat, self.gps_stat, self.rtk_stat]
+        self.diag_msg.status = [self.rtk_stat]
 
         # publishers created at first use to reduce topic clutter
         self.diag_pub = None
@@ -420,34 +421,34 @@ class XSensDriver(Node):
                 self.rtk_stat.level = DiagnosticStatus.ERROR
                 self.rtk_stat.message = "No RTK"
             ######################
-            if status & 0b0001:
-                self.stest_stat.level = DiagnosticStatus.OK
-                self.stest_stat.message = "Ok"
-            else:
-                self.stest_stat.level = DiagnosticStatus.ERROR
-                self.stest_stat.message = "Failed"
-            if status & 0b0010:
-                self.xkf_stat.level = DiagnosticStatus.OK
-                self.xkf_stat.message = "Valid"
-            else:
-                self.xkf_stat.level = DiagnosticStatus.WARN
-                self.xkf_stat.message = "Invalid"
-            if status & 0b0100:
-                self.gps_stat.level = DiagnosticStatus.OK
-                self.gps_stat.message = "Ok"
-                self.raw_gps_msg.status.status = NavSatStatus.STATUS_FIX
-                self.raw_gps_msg.status.service = NavSatStatus.SERVICE_GPS
-                # we borrow the status from the raw gps for pos_gps_msg
-                self.pos_gps_msg.status.status = NavSatStatus.STATUS_FIX
-                self.pos_gps_msg.status.service = NavSatStatus.SERVICE_GPS
-            else:
-                self.gps_stat.level = DiagnosticStatus.WARN
-                self.gps_stat.message = "No fix"
-                self.raw_gps_msg.status.status = NavSatStatus.STATUS_NO_FIX
-                self.raw_gps_msg.status.service = 0
-                # we borrow the status from the raw gps for pos_gps_msg
-                self.pos_gps_msg.status.status = NavSatStatus.STATUS_NO_FIX
-                self.pos_gps_msg.status.service = 0
+            # if status & 0b0001:
+            #     self.stest_stat.level = DiagnosticStatus.OK
+            #     self.stest_stat.message = "Ok"
+            # else:
+            #     self.stest_stat.level = DiagnosticStatus.ERROR
+            #     self.stest_stat.message = "Failed"
+            # if status & 0b0010:
+            #     self.xkf_stat.level = DiagnosticStatus.OK
+            #     self.xkf_stat.message = "Valid"
+            # else:
+            #     self.xkf_stat.level = DiagnosticStatus.WARN
+            #     self.xkf_stat.message = "Invalid"
+            # if status & 0b0100:
+            #     self.gps_stat.level = DiagnosticStatus.OK
+            #     self.gps_stat.message = "Ok"
+            #     self.raw_gps_msg.status.status = NavSatStatus.STATUS_FIX
+            #     self.raw_gps_msg.status.service = NavSatStatus.SERVICE_GPS
+            #     # we borrow the status from the raw gps for pos_gps_msg
+            #     self.pos_gps_msg.status.status = NavSatStatus.STATUS_FIX
+            #     self.pos_gps_msg.status.service = NavSatStatus.SERVICE_GPS
+            # else:
+            #     self.gps_stat.level = DiagnosticStatus.WARN
+            #     self.gps_stat.message = "No fix"
+            #     self.raw_gps_msg.status.status = NavSatStatus.STATUS_NO_FIX
+            #     self.raw_gps_msg.status.service = 0
+            #     # we borrow the status from the raw gps for pos_gps_msg
+            #     self.pos_gps_msg.status.status = NavSatStatus.STATUS_NO_FIX
+            #     self.pos_gps_msg.status.service = 0
 
 #         def fill_from_Sample(ts):
 #             '''Catch 'Sample' MTData blocks.'''
